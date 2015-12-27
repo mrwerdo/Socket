@@ -2,3 +2,5 @@
 .DS_Store
 # Hide our working project
 SocketsDev/
+# Hide our build stuff
+.build/

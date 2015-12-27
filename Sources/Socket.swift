@@ -581,45 +581,46 @@ extension Socket {
     }
 }
 extension Socket {
-    public func send(var data: UnsafePointer<Void>, length: Int, flags: Int32,
+    public func send(data: UnsafePointer<Void>, length: Int, flags: Int32,
         maxSize: Int = 1024) throws -> Int {
+			var d = data 
             var bytesLeft = length
             var bytesSent = 0
             
             loop: while (length > bytesSent) {
                 let len = bytesLeft < maxSize ? bytesLeft : maxSize
-                let success = Darwin.sendto(fd, data, len, flags, nil, 0)
+                let success = Darwin.sendto(fd, d, len, flags, nil, 0)
                 guard success != -1 else {
                     throw SocketError.SendToFailed(errno)
                 }
-                data = data.advancedBy(success)
+                d = d.advancedBy(success)
                 bytesSent += success
                 bytesLeft -= success
             }
             return bytesSent
     }
-    public func send(to addr: AddrInfo, var data: UnsafePointer<Void>,
+    public func send(to addr: AddrInfo, data: UnsafePointer<Void>,
         length: Int, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
-        
+			var d = data 
             var bytesleft = length
             var bytesSent = 0
             
             loop: while (length > bytesSent) {
                 let len = bytesleft < maxSize ? bytesleft : maxSize
                 let success = Darwin.sendto(
-                    fd, data, len, flags, addr.addrinfo.ai_addr,
+                    fd, d, len, flags, addr.addrinfo.ai_addr,
                     UInt32(addr.addrinfo.ai_addr.memory.sa_len)
                 )
                 guard success != -1 else {
                     throw SocketError.SendToFailed(errno)
                 }
-                data = data.advancedBy(success)
+                d = d.advancedBy(success)
                 bytesSent += success
                 bytesleft -= success
             }
             return bytesSent
     }
-    public func send(var msg: msghdr, flags: Int32, maxSize: Int = 1024)
+    public func send(inout msg: msghdr, flags: Int32, maxSize: Int = 1024)
         throws -> Int {
         
             // FIXME: Send message must be in a while loop
