@@ -1,0 +1,4 @@
+# Get ride of .DS_Store
+.DS_Store
+# Hide our working project
+SocketsDev/
