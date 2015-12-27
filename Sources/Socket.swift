@@ -581,7 +581,7 @@ extension Socket {
     }
 }
 extension Socket {
-    public func send(data: UnsafePointer<Void>, length: Int, flags: Int32,
+    public func send(data: UnsafePointer<Void>, length: Int, flags: Int32 = 0,
         maxSize: Int = 1024) throws -> Int {
 			var d = data 
             var bytesLeft = length
