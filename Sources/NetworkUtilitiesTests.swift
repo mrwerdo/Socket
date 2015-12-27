@@ -220,8 +220,7 @@ func testUDPSendTo() {
     do {
         let data = "Hello, World!"
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Datagram, proto: CommunicationProtocol.UDP)
-        var hints = Darwin.addrinfo(ai_flags: 0, ai_family: PF_INET, ai_socktype: SOCK_DGRAM, ai_protocol: IPPROTO_UDP, ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
-        for address in try getaddrinfo(host: "localhost", service: nil, hints: &hints) {
+        for address in try getaddrinfo(host: "localhost", service: nil, hints: &socket.address.addrinfo) {
             try address.setPort(5000)
             try socket.send(to: address, data: data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding))
         }

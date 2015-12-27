@@ -167,7 +167,7 @@ public enum SocketError : ErrorType {
 public class Socket {
     
     public          var fd      : Int32
-    private         var address : AddrInfo
+    public          var address : AddrInfo
     private(set)    var closed  : Bool
     public          var shouldReuseAddress: Bool = true {
         didSet {
@@ -313,6 +313,13 @@ public class Socket {
                 throw SocketError.CloseFailed(errno)
         }
         closed = true
+    }
+    
+    deinit {
+        // Clean up what the user didn't
+        if !closed {
+            do { try close() } catch {}
+        }
     }
 }
 
@@ -635,7 +642,7 @@ extension Socket {
     }
 }
 extension Socket {
-    public class Buffer {
+    public class Message {
         private(set) var data: UnsafeMutablePointer<Void>
         private(set) var length: Int
         private(set) var sender: sockaddr?
@@ -657,7 +664,7 @@ extension Socket {
             data.dealloc(length)
         }
     }
-    public func recv(maxSize: Int, flags: Int32 = 0) throws -> Buffer? {
+    public func recv(maxSize: Int, flags: Int32 = 0) throws -> Message? {
         var buffer = UnsafeMutablePointer<Void>.alloc(maxSize + 1)
         var addrLen = socklen_t(sizeof(sockaddr))
         let addr = UnsafeMutablePointer<sockaddr>.alloc(sizeof(sockaddr))
@@ -683,7 +690,7 @@ extension Socket {
             return nil // Connection is closed if TCP and success == 0.
         }
         buffer[success] = ()
-        return Buffer(copy: buffer, length: success + 1, sender: addr.memory)
+        return Message(copy: buffer, length: success + 1, sender: addr.memory)
     }
     // TODO: Add a recv(msg: etc...) function.
 }
