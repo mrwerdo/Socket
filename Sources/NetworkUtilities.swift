@@ -24,13 +24,18 @@ public enum NetworkUtilitiesError : ErrorType {
     /// value is an error number returned from the system call. Use 
     /// `gai_strerror()` to access a description.
     ///
-    /// **See Also**: x-man-page://ls
+    /// **See Also**: x-man-page://getaddrinfo
+    case GetAddressInfoFailed(Int32)
+    
+    @available(*, unavailable, renamed="GetAddressInfoFailed")
     case GetAddressFailed(Int32)
+    
+    case GetNameInfoFailed(Int32)
     /// Occurs when an invalid parameter is given.
     case ParameterError(String)
 }
 
-/// Returns the address of `obj`. 
+/// Returns the address of `obj`.
 ///
 /// This function is fundamentally unsafe, and
 /// should be only used to get the address of a c structure. You must ensure 
@@ -114,11 +119,13 @@ public func getaddrinfo(host hostname: String?, service servername: String?,
         }
     }
     
-    let error = Darwin.getaddrinfo( hostname_val.ptr,
-                                    servname_val.ptr,
-                                    hints, &res_ptr)
+    let error = Darwin.getaddrinfo(
+        hostname_val.ptr,
+        servname_val.ptr,
+        hints, &res_ptr
+    )
     guard error == 0 else {
-        throw NetworkUtilitiesError.GetAddressFailed(error)
+        throw NetworkUtilitiesError.GetAddressInfoFailed(error)
     }
     
     var addresses: [AddrInfo] = []
@@ -132,6 +139,37 @@ public func getaddrinfo(host hostname: String?, service servername: String?,
     return addresses
 }
 
+public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws -> (hostname: String?, servicename: String?) {
+    var hostnameBuffer = UnsafeMutablePointer<Int8>.alloc(Int(NI_MAXHOST))
+    var servicenameBuffer = UnsafeMutablePointer<Int8>.alloc(Int(NI_MAXSERV))
+    
+    memset(hostnameBuffer, 0, Int(NI_MAXHOST))
+    memset(servicenameBuffer, 0, Int(NI_MAXSERV))
+    
+    defer {
+        hostnameBuffer.dealloc(Int(NI_MAXHOST))
+        servicenameBuffer.dealloc(Int(NI_MAXSERV))
+    }
+    
+    let success = Darwin.getnameinfo(
+        address.sockaddr,
+        UInt32(address.sockaddr.memory.sa_len),
+        hostnameBuffer,
+        UInt32(NI_MAXHOST) * UInt32(sizeof(Int8)),
+        servicenameBuffer,
+        UInt32(NI_MAXSERV) * UInt32(sizeof(Int8)),
+        flags
+    )
+    
+    guard success == 0 else {
+        throw NetworkUtilitiesError.GetNameInfoFailed(success)
+    }
+    
+    return (
+        String.fromCString(hostnameBuffer),
+        String.fromCString(servicenameBuffer)
+    )
+}
 
 /// Performs the call `Darwin.gethostname()`.
 ///

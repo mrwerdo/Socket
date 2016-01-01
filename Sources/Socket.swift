@@ -168,6 +168,24 @@ public class Socket {
     
     public          var fd      : Int32
     public          var address : AddrInfo
+    private(set)    lazy var peerAddress: AddrInfo? = {
+        [unowned self] in
+        
+        let sock_storage = UnsafeMutablePointer<sockaddr_storage>.alloc(sizeof(sockaddr_storage))
+        let sockaddr: UnsafeMutablePointer<Darwin.sockaddr> = UnsafeMutablePointer(sock_storage)
+        var length = socklen_t(sizeof(sockaddr_storage))
+        // Get the peer information.
+        guard getpeername(self.fd, sockaddr, &length) == 0 else {
+            sock_storage.dealloc(sizeof(sockaddr_storage))
+            return nil // I would like to throw something here...
+        }
+        
+        let addr = AddrInfo(copy: self.address.addrinfo)
+        addr.sockaddr_storage.dealloc(sizeof(sockaddr_storage))
+        addr.sockaddr_storage = sock_storage
+        
+        return addr
+    }()
     private(set)    var closed  : Bool
     public          var shouldReuseAddress: Bool = true {
         didSet {
@@ -294,12 +312,18 @@ public class Socket {
                 throw SocketError.ShutdownFailed(errno)
         }
     }
-    /// Closes the socket. Once the socket is closed, no more data can be sent
-    /// or recieved.
+    /// Closes the socket.
+    ///
+    ///
+    /// Closing the socket deletes any associated information with the socket.
+    /// Thus, once a socket is closed, it is considered an error to perform any
+    /// more operations on it.
+    ///
+    ///
     /// - Throws: `SocketError.CloseFailed`
     /// - seealso: 
     ///     - `shutdown(_)`
-    ///     - [The close man page][1]
+    ///     - [The close manual page][1]
     ///     - This [article][2] provides a good explanation for when to use
     ///         [close][1] and [shutdown][3].
     ///
@@ -523,7 +547,7 @@ extension Socket {
     ///     - `SocketError.CloseFailed`
     ///     - `SocketError.SetSocketOptionFailed`
     ///     - `SocketError.NoAddressesAvailable`
-    public func connect(toAddress hostname: String, port: Int32) throws {
+    public func connect(to hostname: String, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError("Invalid port number - port cannot"
             + " be negative")
@@ -573,13 +597,13 @@ extension Socket {
     /// - Throws:
     ///     - `SocketError.ParameterError`
     ///     - `SocketError.ConnectFailed`
-    public func connect(setAddress address: AddrInfo, port: Int32) throws {
+    public func connect(to address: AddrInfo, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError("Invalid port number - port cannot"
             + " be negative")
         }
         try address.setPort(port)
-        address.addrinfo.ai_addrlen = UInt32(sizeofValue(address.addrinfo.ai_addr))
+        address.addrinfo.ai_addrlen = UInt32(sizeofValue(address.addrinfo.ai_addr.memory))
         guard Darwin.connect(fd, address.addrinfo.ai_addr, address.addrinfo.ai_addrlen) == 0
             else {
                 throw SocketError.ConnectFailed(errno)
@@ -627,7 +651,7 @@ extension Socket {
             }
             return bytesSent
     }
-    public func send(inout msg: msghdr, flags: Int32, maxSize: Int = 1024)
+    public func send(inout msg: msghdr, flags: Int32 = 0, maxSize: Int = 1024)
         throws -> Int {
         
             // FIXME: Send message must be in a while loop
@@ -639,6 +663,14 @@ extension Socket {
                 throw SocketError.SendMSGFailed(errno)
             }
             return isSuccess
+    }
+    public func send(str: String, flags: Int32 = 0, maxSize: Int = 1024) throws {
+        try self.send(str, length: str.lengthOfBytesUsingEncoding(NSUTF8StringEncoding), flags: flags, maxSize: maxSize)
+    }
+    /// Make sure that data is already base 64 encoded, this just uses data.bytes
+    /// and data.length (whene data is NSData).
+    public func send(data: NSData, flags: Int32 = 0, maxSize: Int = 1024) throws {
+        try self.send(data.bytes, length: data.length, flags: flags, maxSize: maxSize)
     }
 }
 extension Socket {
@@ -707,9 +739,8 @@ extension Socket {
         
         let socket = Socket(copy: AddrInfo(copy: self.address.addrinfo), fd: success)
         socket.address.sockaddr_storage.dealloc(sizeof(sockaddr_storage))
-        socket.address.sockaddr_storage = sockStorage
+        socket.address.sockaddr_storage = sockStorage // Substitute sockStorage
         
-        getpeername(socket.fd, sockaddr, &length) // not worth checking errors here.
         return socket
     }
     public func listen(backlog: Int32) throws {

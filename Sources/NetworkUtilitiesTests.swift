@@ -17,7 +17,7 @@ func testgetaddrinfo() {
         print(addresses)
     } catch let error as NetworkUtilitiesError {
         switch error {
-        case .GetAddressFailed(let num):
+        case .GetAddressInfoFailed(let num):
             print(String.fromCString(gai_strerror(num)))
         case .ParameterError(let str):
             print(str)
@@ -41,7 +41,7 @@ func testgetandsethostname() {
         print(hostname, newhostname, changedhostname, finalhostname)
     } catch let e as NetworkUtilitiesError {
         switch e {
-        case .GetAddressFailed(let n):
+        case .GetAddressInfoFailed(let n):
             print("Probally not enough memory: \(String.fromCString(strerror(n)))")
         case .SetHostnameFailed(let n):
             print("Probally not root: \(String.fromCString(strerror(n)))")
@@ -69,7 +69,7 @@ func exampleUsingGetHostNameAndGetAddrInfo() {
             print(d)
         case .GetHostNameFailed(let n):
             print("Error retriving the host name: \(String.fromCString(strerror(n)))")
-        case .GetAddressFailed(let n):
+        case .GetAddressInfoFailed(let n):
             print("Error retriving the host address: \(String.fromCString(strerror(n)))")
         default:
             break
@@ -82,7 +82,7 @@ func testTCPConnect() {
     
     do {
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
-        try socket.connect(toAddress: "andrews-imac.local", port: 5000)
+        try socket.connect(to: "andrews-imac.local", port: 5000)
         try socket.send(data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding), flags: 0)
         try socket.close()
     } catch let e as SocketError {
@@ -152,7 +152,7 @@ func testTCPServer() {
         }
     } catch let e as NetworkUtilitiesError {
         switch e {
-        case .GetAddressFailed(let n):
+        case .GetAddressInfoFailed(let n):
             print("Get address info failed: \(String.fromCError(n))")
         case .ParameterError(let str):
             print("Parameter error: \(str)")
@@ -175,7 +175,7 @@ func testGetAddrInfoNoMemoryLeaks() {
                 let _ = try getaddrinfo(host: "andrews-imac.local", service: nil, hints: &hints)
             } catch let e as NetworkUtilitiesError {
                 switch e {
-                case .GetAddressFailed(let n):
+                case .GetAddressInfoFailed(let n):
                     print(String.fromCError(n))
                 default:
                     print(e)
@@ -263,4 +263,35 @@ func testUDPRecv() {
             print(e)
         }
     } catch {}
+}
+
+func testGetnameInfo() {
+    do {
+        let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+        let address = try getaddrinfo(host: "15M216063.local", service: nil, hints: &socket.address.addrinfo)
+        try socket.connect(to: address.first! , port: 5000)
+        try socket.send("Hello, World!")
+        if let peer = socket.peerAddress {
+            print(peer.hostname)
+        } else {
+            print("failed to get peer address")
+        }
+        try socket.close()
+    } catch let e as SocketError {
+        switch e {
+        case .ConnectFailed(let n):
+            print(String.fromCError(n))
+        default:
+            print(e)
+        }
+    } catch let e as NetworkUtilitiesError {
+        switch e {
+        case .GetNameInfoFailed(let n):
+            print(String.fromCString(gai_strerror(n)))
+        default:
+            print(e)
+        }
+    } catch {
+        print(error)
+    }
 }

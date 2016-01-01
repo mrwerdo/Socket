@@ -24,8 +24,20 @@ public class AddrInfo : CustomDebugStringConvertible {
         }
     }
     public var sockaddr_storage: UnsafeMutablePointer<Darwin.sockaddr_storage>
+    public var hostname: String? {
+        if let hostname = String.fromCString(addrinfo.ai_canonname) {
+            return hostname
+        }
+        do {
+            if let hostname = try getnameinfo(self).hostname {
+                return hostname
+            }
+        } catch {}
+        return nil
+    }
+    @available(*, unavailable, renamed="hostname")
     public var canonname: String? {
-        return String.fromCString(addrinfo.ai_canonname)
+        fatalError("unavailable function call")
     }
     public init() {
         addrinfo = Darwin.addrinfo()
