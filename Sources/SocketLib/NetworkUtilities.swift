@@ -29,7 +29,7 @@ public enum NetworkUtilitiesError : ErrorType {
     
     @available(*, unavailable, renamed="GetAddressInfoFailed")
     case GetAddressFailed(Int32)
-    
+    /// Thrown by `getnameinfo(
     case GetNameInfoFailed(Int32)
     /// Occurs when an invalid parameter is given.
     case ParameterError(String)
@@ -55,14 +55,14 @@ public func ntohs(value: CUnsignedShort) -> CUnsignedShort {
 public let htons = ntohs
 
 /// WARNING: Don't use, I don't know what it does...
-public func ntohs_char(value: Int8) -> Int8 {
-    return (value << 8) + (value >> 8)
-}
-
+//public func ntohs_char(value: Int8) -> Int8 {
+//    return (value << 8) + (value >> 8)
+//}
+//
 
 extension String {
     /// Returns an underlying c buffer.
-    /// - Warning: deallocate when done with the pointer.
+    /// - Warning: Deallocate the pointer when done to aviod memory leaks.
     public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
         return self.withCString { (ptr: UnsafePointer<Int8>) ->
             (UnsafeMutablePointer<Int8>, Int) in
@@ -77,28 +77,45 @@ extension String {
     }
 }
 
-/// Performs the call `Darwin.getaddrinfo()`.
+/// Obtains a list of IP addresses and port number, given the requirements
+/// `hostname`, `serviceName` and `hints`.
 ///
-/// The `getaddrinfo(hostname:servname:hints:)` function is used to get a list 
-/// of IP addresses and port numebrs for host `hostname` and service `servname`.
-/// - parameter hostname: Either a valid host name or a numeric host address, 
-///     consisting of a dotted decimal IPv4 address or a n IPv6 address.
-/// - parameter servername: Either a decimal port number or a service name
-///     listed in services(5) - see the man pages.
+/// The list of addresses given will be filtered out by the options specificed.
+/// If `serviceName` is specified, then only hosts with that service will be
+/// returned, this is likewise for `hostname` too.
 ///
-/// - Attention: `hostname` and `servername` can not be both nil, that is, only
-///                 only one may be nil at a time.
-/// 
+/// `hints` provides additional specification to the type of address returned.
+/// You may set these fields to filter for a specific type of address:
+///
+/// - `ai_family` to control the protocol family used. If this
+///     value can be any, then it should be set to `PF_UNSPEC`. This is
+///     equivelent to `DomainAddressFamily`.
+/// - `ai_socktype` denotes the allowed socket type given. Zero allows
+///     any type. This is equivelent to `SocketType`.
+/// - `ai_protocol` indicates the transport layer desired. Zero again
+///     allows any protocol. This is equivelent to `CommunicationProtocol`.
+/// - `ai_flags` allows additional filtering. See this
+///     [page](x-man-page://3/getaddrinfo)
+///
+///
+/// - Attention:    `hostname` and `servername` may not be both nil at the same
+///                 time.
+///
+/// - parameters:
+///     - hostname:     Either a valid host name or a numeric host address,
+///                     cosisting of a dotted decimal IPv4 address or a IPv6
+///                     address.
+///     - servicename:  Either a decimal port number or a service name (see
+///                     [services](x-man-page://5/services))
+///
+///
 /// - Throws:
-///     - `NetworkUtilities.ParmeterError` when invalid parameters are present.
-///     - `NetworkUtilities.LibraryError` when an error occured within 
-///         `Darwin.getaddrinfo()`. The functions return value is returned as
-///         an associate value, see the man pages for the corresponding error
-///         codes.
-public func getaddrinfo(host hostname: String?, service servername: String?,
+///     - `NetworkUtilities.ParmeterError`
+///     - `NetworkUtilities.GetAddressInfoFailed`
+public func getaddrinfo(host hostname: String?, service serviceName: String?,
     hints: UnsafePointer<addrinfo>) throws -> [AddrInfo] {
     
-        guard !(hostname == nil && servername == nil) else {
+        guard !(hostname == nil && serviceName == nil) else {
             throw NetworkUtilitiesError.ParameterError(
                 "Host name and server name cannot be nil at the same time!"
             )
@@ -109,7 +126,7 @@ public func getaddrinfo(host hostname: String?, service servername: String?,
         let hostname_val: (ptr: UnsafeMutablePointer, len: Int) =
         hostname?.getCString ?? (nil, 0)
         let servname_val: (ptr: UnsafeMutablePointer, len: Int) =
-        servername?.getCString ?? (nil, 0)
+        serviceName?.getCString ?? (nil, 0)
         
         defer {
             if hostname_val.len > 0 {
@@ -222,6 +239,7 @@ public func sethostname(hostname: String) throws {
 }
 
 extension String {
+    /// Returns a `String` given a c error `number`.
     public static func fromCError(number: Int32) -> String {
         return String.fromCString(strerror(number))!
     }
@@ -235,13 +253,13 @@ public struct HostEntry {
 }
 
 /// Calls gethostbyname2 in the implementation.
-public func gethostbyname(str: String, family: DomainAddressFamily)
+public func gethostbyname(name str: String, family: DomainAddressFamily)
     -> HostEntry? {
         switch family {
         case .INET, .INET6: break
         default:
             preconditionFailure(
-                "Only internet addresses are supported (i.e. INET or INET6"
+                "Only internet addresses are supported (i.e. INET or INET6)"
             )
         }
         let ent = Darwin.gethostbyname2(str, family.systemValue)
@@ -277,7 +295,7 @@ public func gethostbyname(str: String, family: DomainAddressFamily)
         )
         while addr_list[counter] != nil {
             var address = addr_list[counter].memory
-            if let str = inet_ntop(family, addr: &address) {
+            if let str = inet_ntop(&address, type: family) {
                 record.addresses.append(str)
             }
             counter += 1
@@ -286,7 +304,17 @@ public func gethostbyname(str: String, family: DomainAddressFamily)
         return record
 }
 
-public func inet_ntop(type: DomainAddressFamily, addr: UnsafePointer<in_addr>)
+/// Returns a string representation of `address`, or nil if it could not be
+/// converted. Currently understood address formats are `INET` and `INET6`.
+/// - parameters:
+///     - address:  The address to be converted.
+///     - type:     The type of address given. The only valid values are `INET`
+///                 or `INET6`, all other values are undefined (subject to 
+///                 future change).
+/// - returns:
+///                 A string representation of `address`, or nil if it could 
+///                 not be converted.
+public func inet_ntop(address: UnsafePointer<in_addr>, type: DomainAddressFamily)
     -> String? {
         var length: Int32
         switch type {
@@ -300,13 +328,10 @@ public func inet_ntop(type: DomainAddressFamily, addr: UnsafePointer<in_addr>)
         var cstring: [Int8] = [Int8](count: Int(length), repeatedValue: 0)
         let result = Darwin.inet_ntop(
             type.systemValue,
-            addr,
+            address,
             &cstring,
             socklen_t(length)
         )
-        guard result != nil else {
-            return nil
-        }
         return String.fromCString(result)
 }
 
