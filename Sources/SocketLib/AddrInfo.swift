@@ -8,14 +8,16 @@
 
 import Darwin
 
-/// Problem:    getaddrinfo() returns a linked list. It provides a method to free it
-///             freeaddrinfo(). struct addrinfo contains a pointer to another 
-///             struct, so memory must be managed for two structures.
+// Problem:    getaddrinfo() returns a linked list. It provides a method to free it
+//             freeaddrinfo(). struct addrinfo contains a pointer to another
+//             struct, so memory must be managed for two structures.
 
-/// Now, I figured that sockaddr isn't a good structure to hold the memory.
-/// So I used sockaddr_storage since that is more compatible with other network
-/// protocol uses.
+// Now, I figured that sockaddr isn't a good structure to hold the memory.
+// So I used sockaddr_storage since that is more compatible with other network
+// protocol uses.
 
+/// AddrInfo contains a references to address structures and socket address 
+/// structures.
 public class AddrInfo : CustomDebugStringConvertible {
     public var addrinfo: Darwin.addrinfo
     public var sockaddr: UnsafeMutablePointer<Darwin.sockaddr> {
@@ -39,6 +41,7 @@ public class AddrInfo : CustomDebugStringConvertible {
     public var canonname: String? {
         fatalError("unavailable function call")
     }
+    /// Constructs the addresses so they all reference each other internally.
     public init() {
         addrinfo = Darwin.addrinfo()
         sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>.alloc(
@@ -47,9 +50,16 @@ public class AddrInfo : CustomDebugStringConvertible {
         addrinfo.ai_canonname = nil
         addrinfo.ai_addr = sockaddr
     }
+    /// Claims ownership of the address provided. It must have been created 
+    /// by performing: 
+    ///
+    ///      let size = sizeof(sockaddr_storage)
+    ///      let addr = UnsafeMutablePointer<sockaddr_storage>.alloc(size)
     public init(claim addr: Darwin.addrinfo) {
         addrinfo = addr
-        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>(addr.ai_addr)
+        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>(
+            addr.ai_addr
+        )
     }
     public init(copy addr: Darwin.addrinfo) {
         addrinfo = addr
@@ -76,7 +86,13 @@ public class AddrInfo : CustomDebugStringConvertible {
     
     public var debugDescription: String {
         var out = ""
-        print(addrinfo, sockaddr_storage.memory, separator: ", ", terminator: "", toStream: &out)
+        let sockAddrStorage = sockaddr_storage.memory
+        print(addrinfo,
+            sockAddrStorage,
+            separator: ", ",
+            terminator: "",
+            toStream: &out
+        )
         return out
     }
 
