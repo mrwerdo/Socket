@@ -334,7 +334,6 @@ public class Socket {
     }
     
     deinit {
-        // Clean up what the user didn't
         if !closed {
             do { try close() } catch {}
         }
@@ -615,6 +614,25 @@ extension Socket {
     }
 }
 extension Socket {
+	/// Sends `data` to the connected peer
+	///
+	/// Depending on the protocol, the socket must either be in a connected 
+	/// state, or had a previous call to connect (or bind) to specify the
+	/// communication address.
+	///
+	/// - parameters:
+	///		- data:		A pointer to a buffer to send
+	///		- length:	The length of the buffer (in bytes).
+	///		- flags:	Control options for sending and recieving. 0 is the 
+	///					default.
+	///		- maxSize:	Specifies the maximum packet size when attempting to
+	///					send large amounts of data. If, for example, length
+	///					is twice the size of maxSize, then it will take two
+	///					calls (internally) to send the data. Default is 1024.
+	/// - Returns:
+	///					The number of bytes sent.
+	/// - Throws:
+	///		- `SocketError.SendToFailed`
     public func send(data: UnsafePointer<Void>, length: Int, flags: Int32 = 0,
         maxSize: Int = 1024) throws -> Int {
 			var data = data 
@@ -628,7 +646,8 @@ extension Socket {
                     data,
                     len,
                     flags,
-                    nil,
+                    nil, // When nil, the address parameter is autofilled,
+						 // if it exsists
                     0
                 )
                 guard success != -1 else {
@@ -640,7 +659,30 @@ extension Socket {
             }
             return bytesSent
     }
-    public func send(to addr: AddrInfo, data: UnsafePointer<Void>,
+	/// Sends `data` to the specified peer.
+	///
+	/// If the socket is a connectionless socket, then it is acceptable
+	/// to provide different values for the address parameter. On the 
+	/// other hand, if the socket is connection orientated, the address
+	/// connected to must be provided. This is typically `self.address`.
+	/// The method `send(data:length:flags:maxSize)` has been provided 
+	/// for conviently calling `sendto`.
+	///
+	/// - parameters:
+	///		- address:		The address to send data to.
+	///		- data:			A pointer to the buffer to send.
+	///		- length:		The length of the buffer in bytes.
+	///		- flags:		Controls additional options for sending
+	///						data. Default is 0.
+	///		- maxSize:		The maximum size of each packet (in bytes) when 
+	///						sending large amounts of data. If a buffer is two
+	///						big to send, then it will be split into multiple
+	///						packets.
+	/// - Returns:
+	///						The number of bytes sent.
+	/// - Throws:
+	///		- `SocketError.SendToFailed`
+    public func send(to address: AddrInfo, data: UnsafePointer<Void>,
         length: Int, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
 			var data = data 
             var bytesleft = length
@@ -653,8 +695,8 @@ extension Socket {
                     data,
                     len,
                     flags,
-                    addr.addrinfo.ai_addr,
-                    UInt32(addr.addrinfo.ai_addr.memory.sa_len)
+                    address.addrinfo.ai_addr,
+                    UInt32(address.addrinfo.ai_addr.memory.sa_len)
                 )
                 guard success != -1 else {
                     throw SocketError.SendToFailed(errno)
@@ -665,6 +707,31 @@ extension Socket {
             }
             return bytesSent
     }
+	/// Sends `msghdr` to the specified peer.
+	///
+	/// Currently, this method provides a convience wrapper to calling
+	///	`Darwin.sendmsg()`. Do not rely on this. If you are using this method
+	/// you probally know more about it than I do, and you should probally write
+	/// the implementation for it.
+	///
+	/// - parameters:
+	///		- msg:			A msghdr object which specifies a series of messages
+	///						and their destination.
+	///		- flags:		Controls additional parameters on the send behaviour.
+	///						Default is 0.
+	///		- maxSize:		Specifies the maximum packet size allowed to be sent
+	///						(measured in bytes).
+	///						Buffers which exceed this value will be split to be 
+	///						less than or equal to this length.
+	/// - Returns:
+	///						The number of bytes sent.
+	/// - Throws:
+	///		- `SocketError.SendMSGFailed`
+	///
+	/// - Todo: This implementation is a poor one. I do not have enough 
+	///			understanding/willpower to implement it correctly. It should 
+	///			attempt to break each packet into a size of 1024, and send 
+	///			individually.
     public func send(inout msg: msghdr, flags: Int32 = 0, maxSize: Int = 1024)
         throws -> Int {
         
@@ -678,15 +745,55 @@ extension Socket {
             }
             return isSuccess
     }
-    public func send(str: String, flags: Int32 = 0, maxSize: Int = 1024) throws {
+	/// Sends a string to the peer.
+	///
+	/// This method adhers to the same requirements as the other, more advanced 
+	/// `sendTo(_:data:length:flags:maxSize:)` method. The socket must have had
+	/// it's address set, that is, if it's a connectionless socket, a call to `bind`
+	/// or `connect`, and if its a connection orientated socket, it must be connected
+	/// to a peer.
+	///
+	/// - parameters:
+	///		- str:			The string to send. It's length is decoded using the
+	///						NSUTF8StringEncoding interpretation.
+	///		- flags:		Controls additional parameters determining the 
+	///						behaviour of `send`.
+	///		- maxSize:		Specifies the maximum size of packets. If a buffer
+	///						exceeds this size, then it will be split into this size
+	///						until the whole buffer is sent (unless a failure occurs).
+	///	- Returns:
+	///						The number of bytes sent.
+	/// - Throws:
+	///		- `SocketError.SendToFailed`
+    public func send(str: String, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
         let length = str.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
-        try self.send(str, length: length, flags: flags, maxSize: maxSize)
+        return try self.send(str, length: length, flags: flags, maxSize: maxSize)
     }
-    /// Make sure that data is already base 64 encoded, this just uses 
-    /// data.bytes and data.length (whene data is NSData).
-    public func send(data: NSData, flags: Int32 = 0, maxSize: Int = 1024) throws {
+
+	/// Sends `data` to the peer.
+	///
+	/// Allows the sending of data from the host to the peer. Attempting to send binary
+	/// data this way is not a good idea (unless the format is exactly the same on the
+	/// peer machine). It should instead be encoded, for example, by using base 64
+	/// encoding.
+	///
+	/// This method adhers to the same requirements as the other, more advanced 
+	/// function `sendTo(_:data:length:flags:maxSize:)`. The socket must have had its
+	/// address set, either by a call to `connect` or by a call to `bind`.
+	///
+	/// - parameters: 
+	///		- data:			The data to send.
+	///		- flags:		Provides additional control parameters for `send`.
+	///		- maxSize:		Specifies the maximum size of packets allow to be sent.
+	///						Buffers which exceed this value will be split into small
+	///						sizes, until the whole buffer is sent.
+	/// - Returns:
+	///						The number of bytes sent.
+	///	- Throws:
+	///		- `SocketError.SendToFailed`
+    public func send(data: NSData, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
         let len = data.length
-        try self.send(data.bytes, length: len, flags: flags, maxSize: maxSize)
+        return try self.send(data.bytes, length: len, flags: flags, maxSize: maxSize)
     }
 }
 extension Socket {
