@@ -760,24 +760,26 @@ extension Socket {
         }
     }
 }
-// who the hell did this?
-// like really, wtf!
-// Just an FYI: swift imports arrays from a struct as a tuple...
+
 extension sockaddr_un {
-    /// - Complexity: O(1)
-    /// - Warning: Path length must be at most 104 in length.
+    /// - Warning: An data over the 104th index (index 103) is not copied into 
+    ///             buffer.
     mutating func setPath(path: UnsafePointer<Int8>, length: Int) {
+        
         var array = [Int8](count: 104, repeatedValue: 0)
         for i in 0..<length {
             array[i] = path[i]
         }
         setPath(array)
     }
-    /// - Warning: Path must be at 104 in length.
+    /// - Warning: Path must be at least 104 in length.
     mutating func setPath(path: [Int8]) {
+        
+        precondition(path.count >= 104, "Path must be at least 104 in length")
+        
         sun_path.0 = path[0]
         // and so on for infinity ...
-        // ... python is handy ...
+        // ... python is handy
         sun_path.1 = path[1]
         sun_path.2 = path[2]
         sun_path.3 = path[3]

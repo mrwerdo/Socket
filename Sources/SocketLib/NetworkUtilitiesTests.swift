@@ -295,3 +295,30 @@ func testGetnameInfo() {
         print(error)
     }
 }
+
+func testMoreTCPServerStuff() {
+    do {
+        let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+        try socket.bind(toAddress: "andrews-imac.local", port: 5000)
+        if let hostname = socket.address.hostname {
+            print("Bound server to \(hostname) on port 5000...")
+        }
+        try socket.listen(5)
+        while true {
+            let incomming = try socket.accept()
+            if let message = try incomming.recv(1024) {
+                if let data = String.fromCString(UnsafeMutablePointer(message.data)) {
+                    print("Recieved a message from \(incomming.address.hostname ?? "an unknown host"): \(data)")
+                } else {
+                    print("Failed to decode data.")
+                }
+            } else {
+                print("Failed to recieve data.")
+            }
+            try incomming.send("Hello, your address is: \(incomming.address.hostname ?? "unknown")")
+            try incomming.close()
+        }
+    } catch {
+        print(error)
+    }
+}

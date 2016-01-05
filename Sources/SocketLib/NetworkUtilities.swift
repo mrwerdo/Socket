@@ -221,6 +221,74 @@ extension String {
     }
 }
 
+public struct HostEntry {
+    public var name: String? = ""
+    public var aliases: [String] = []
+    public var type: DomainAddressFamily?
+    public var addresses: [String] = []
+}
+
+/// Calls gethostbyname2 in the implementation.
+public func gethostbyname(str: String, family: DomainAddressFamily) -> HostEntry? {
+    switch family {
+    case .INET, .INET6: break
+    default:
+        preconditionFailure("Only internet addresses are supported (i.e. INET or INET6")
+    }
+    let ent = Darwin.gethostbyname2(str, family.systemValue)
+    guard ent != nil else {
+        return nil
+    }
+
+    var record = HostEntry()
+    record.name = String.fromCString(ent.memory.h_name)
+    switch ent.memory.h_addrtype {
+    case PF_INET:
+        record.type = .INET
+    case PF_INET6:
+        record.type = .INET6
+    default:
+        break
+        //preconditionFailure("Found an address which is not listed in the documentation")
+    }
+    var counter = 0
+    while ent.memory.h_aliases[counter] != nil {
+        if let str = String.fromCString(ent.memory.h_aliases[counter]) {
+            record.aliases.append(str)
+        }
+        counter += 1
+    }
+
+    counter = 0
+    let addr_list = UnsafeMutablePointer<UnsafeMutablePointer<Darwin.in_addr>>(ent.memory.h_addr_list)
+    while addr_list[counter] != nil {
+        var address = addr_list[counter].memory
+        if let str = inet_ntop(family, addr: &address) {
+            record.addresses.append(str)
+        }
+        counter += 1
+    }
+    
+    return record
+}
+
+public func inet_ntop(type: DomainAddressFamily, addr: UnsafePointer<in_addr>) -> String? {
+    var length: Int32
+    switch type {
+    case .INET:
+        length = INET_ADDRSTRLEN
+    case .INET6:
+        length = INET6_ADDRSTRLEN
+    default:
+        return nil
+    }
+    var cstring: [Int8] = [Int8](count: Int(length), repeatedValue: 0)
+    let result = Darwin.inet_ntop(type.systemValue, addr, &cstring, socklen_t(length))
+    guard result != nil else {
+        return nil
+    }
+    return String.fromCString(result)
+}
 
 
 // end of file
