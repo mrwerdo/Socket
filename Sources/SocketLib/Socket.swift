@@ -797,17 +797,25 @@ extension Socket {
     }
 }
 extension Socket {
+	/// Contains a message recieved from a peer.
     public class Message {
+		/// The data buffer recieved from the peer.
+		/// It is null terminated at `data[length]`, thus, to retrive
+		/// all the data and ignore the termiator, you should use `data[length-1]`.
         private(set) var data: UnsafeMutablePointer<Void>
         private(set) var length: Int
+		/// The sender who sent this message.
         private(set) var sender: sockaddr?
         
+		/// Claims ownership of `data`, and initalizes the object with `length` and 
+		/// `sender`.
         init(claim data: UnsafeMutablePointer<Void>, length: Int,
             sender: sockaddr?) {
                 self.data = data
                 self.length = length
                 self.sender = sender
         }
+		/// Copies `data` and initalizes the object with `length` and `sender`.
         init(copy data: UnsafeMutablePointer<Void>, length: Int,
             sender: sockaddr?) {
                 self.data = UnsafeMutablePointer<Void>.alloc(length)
@@ -819,6 +827,28 @@ extension Socket {
             data.dealloc(length)
         }
     }
+	/// Returns any data which has been recieved from the peer(s).
+	///
+    /// Returns any data recieved by the system destined for this socket. If the
+	/// socket is using Transmisison Control Protocol (TCP), and the client 
+	/// disconnected, then this method returns `nil`. It will not return `nil`
+	/// under any other circumstances.	
+	///
+	/// If the socket is using a connectionless orientated protocol, the socket
+	/// must first be bound to an address (using `bind`) prior before calling 
+	///	recieve.
+	///
+	/// - parameters:
+	///		- maxSize:		Specifices the maximum size of data to be returned.
+	///		- flags:		Provides additional control to the behaviour of 
+	///						`recvfrom`. Default is 0.
+	/// - Returns:
+	///						A `Message` object, which contains the buffer and
+	///						the sender. `Nil` iff the connection protocol is TCP
+	///						and the client disconnected.
+	/// - Throws:
+	///		- `SocketError.RecvTryAgain`
+	///		- `SocketError.RecvFromFailed`
     public func recv(maxSize: Int, flags: Int32 = 0) throws -> Message? {
         var buffer = UnsafeMutablePointer<Void>.alloc(maxSize + 1)
         var addrLen = socklen_t(sizeof(sockaddr))
@@ -851,10 +881,21 @@ extension Socket {
         }
         buffer[success] = ()
         return Message(copy: buffer, length: success + 1, sender: addr.memory)
-    }
+	}
     // TODO: Add a recv(msg: etc...) function.
 }
 extension Socket {
+	/// Accepts a pending connection and returns the connected socket.
+	/// 
+	/// Before a socket is allowed to accept a connection, it must be bound
+	/// to an address and a port, and must be listening for incomming 
+	/// connections.
+	/// 
+	/// - Returns:
+	///					A connected socket, using the same protocol as the
+	///					calling bound socket.
+	/// - Throws:
+	///		- `SocketError.AcceptFailed`
     public func accept() throws -> Socket {
         let sockStorage = UnsafeMutablePointer<sockaddr_storage>.alloc(
             sizeof(sockaddr_storage)
@@ -879,6 +920,9 @@ extension Socket {
     /// - parameter backlog: The number of connections to queue before
     ///                         successive clients will be blocked.
     ///
+	/// - Throws:
+	///		- `SocketError.ParameterError`
+	///		- `SocketError.ListenFailed`
     /// - Seealso: [Man Pages](x-man-page://2/listen)
     public func listen(backlog: Int32) throws {
         guard backlog >= 0 else {
@@ -895,6 +939,20 @@ extension Socket {
     }
 }
 extension Socket {
+	/// Sets whether the system is allowed to reuse the address if it's
+	/// already in use.
+	/// 
+	/// - Note:
+	/// If `bind` is failing because the 'address is already in use', then
+	/// this will allow the system to reuse that address. This problem is
+	/// caused by the peer's connection lingering and staying open, preventing
+	/// the sockets form fully by destroyed, and thus, preventing the address
+	/// from being used again.
+	///
+	///	- parameter value:	`true` to allow reuse of the address, `false` to 
+	///						disallow reuse of the address.
+	/// - Throws:
+	///		- `SocketError.SetSocketOptionFailed`
     public func setShouldReuseAddress(value: Bool) throws {
         var number: CInt = value ? 1 : 0
         guard Darwin.setsockopt(

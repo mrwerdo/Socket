@@ -31,6 +31,10 @@ public enum NetworkUtilitiesError : ErrorType {
     case GetAddressFailed(Int32)
     /// Thrown by `getnameinfo(
     case GetNameInfoFailed(Int32)
+	/// Thrown by `gethostbyname(_:family:)`. The associate value contains
+	/// an error number. Use `herror()` or `hstrerror()` to print or obtain
+	/// a string respectively.
+	case GetHostByNameFailed(Int32)
     /// Occurs when an invalid parameter is given.
     case ParameterError(String)
 }
@@ -252,19 +256,32 @@ public struct HostEntry {
     public var addresses: [String] = []
 }
 
-/// Calls gethostbyname2 in the implementation.
-public func gethostbyname(name str: String, family: DomainAddressFamily)
-    -> HostEntry? {
+/// Returns host information associated with the given `hostname`.
+///
+/// Only IPv4 and IPv6 addresses are supported, failing to meet this 
+/// throws an error.
+/// 
+/// - parameters:
+///		- hostname:			The hostname to look up. This can be either
+///							a name, an IPv4 address or an IPv6 address.
+///							In the latter two cases, family must match.
+///		- family:			The type of address given in `hostname`.
+///
+///	- Returns:
+///							A HostEntry, which contains information
+///							about the specified host.
+/// - Throws:
+///		- `NetworkUtilitiesError.GetHostByNameFailed`
+public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
+    -> HostEntry {
         switch family {
         case .INET, .INET6: break
         default:
-            preconditionFailure(
-                "Only internet addresses are supported (i.e. INET or INET6)"
-            )
+			NetworkUtilitiesError.ParameterError("Only IPv4 and IPv6 addresses are supported")
         }
-        let ent = Darwin.gethostbyname2(str, family.systemValue)
+        let ent = Darwin.gethostbyname2(hostname, family.systemValue)
         guard ent != nil else {
-            return nil
+			throw NetworkUtilitiesError.GetHostByNameFailed(h_errno)
         }
         
         var record = HostEntry()
