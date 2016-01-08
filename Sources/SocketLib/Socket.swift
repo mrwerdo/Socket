@@ -232,7 +232,6 @@ public class Socket {
             guard fd != -1 else {
                 throw SocketError.CreationFailed(errno)
             }
-            try setShouldReuseAddress(true)
     }
     /// Copys `address` and initalises the socket from the `fd` given.
     /// - parameter address: The socket's address.
@@ -325,12 +324,14 @@ public class Socket {
     /// [2]: https://msdn.microsoft.com/en-us/library/ms738547(VS.85).aspx
     /// [3]: x-man-page://2/shutdown
     public func close() throws {
-        guard Darwin.close(
-            fd
-            ) == 0 else {
-                throw SocketError.CloseFailed(errno)
+        if !closed {            
+            guard Darwin.close(
+                fd
+                ) == 0 else {
+                    throw SocketError.CloseFailed(errno)
+            }
+            closed = true
         }
-        closed = true
     }
     
     deinit {
@@ -955,6 +956,7 @@ extension Socket {
 	///		- `SocketError.SetSocketOptionFailed`
     public func setShouldReuseAddress(value: Bool) throws {
         var number: CInt = value ? 1 : 0
+        shouldReuseAddress = value
         guard Darwin.setsockopt(
             fd,
             SOL_SOCKET,
