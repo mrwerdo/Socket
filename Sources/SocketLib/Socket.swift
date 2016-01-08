@@ -850,7 +850,7 @@ extension Socket {
 	///		- `SocketError.RecvTryAgain`
 	///		- `SocketError.RecvFromFailed`
     public func recv(maxSize: Int, flags: Int32 = 0) throws -> Message? {
-        var buffer = UnsafeMutablePointer<Void>.alloc(maxSize + 1)
+        var buffer = UnsafeMutablePointer<Int8>.alloc(maxSize + 1)
         var addrLen = socklen_t(sizeof(sockaddr))
         let addr = UnsafeMutablePointer<sockaddr>.alloc(sizeof(sockaddr))
         
@@ -879,7 +879,7 @@ extension Socket {
         if success == 0 && self.address.addrinfo.ai_protocol == IPPROTO_TCP {
             return nil // Connection is closed if TCP and success == 0.
         }
-        buffer[success] = ()
+        buffer[success] = 0
         return Message(copy: buffer, length: success + 1, sender: addr.memory)
 	}
     // TODO: Add a recv(msg: etc...) function.
