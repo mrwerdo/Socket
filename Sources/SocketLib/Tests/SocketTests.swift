@@ -17,11 +17,11 @@ func testThatItStillWorksForInsaneUsers(domain: DomainAddressFamily, _ hostname:
         do {
             let socket = try Socket(domain: domain, type: .Stream, proto: .TCP)
             try socket.setShouldReuseAddress(true)
-            try socket.bind(toAddress: hostname, port: 5000)
+            try socket.bindTo(host: hostname, port: 5000)
             try socket.listen(1)
             
             let client = try Socket(domain: domain, type: .Stream, proto: .TCP)
-            try client.connect(to: hostname, port: 5000)
+            try client.connectTo(host: hostname, port: 5000)
             
             let peer = try socket.accept()
             let data = "hello, world! I'm in the loop at: \(i)"

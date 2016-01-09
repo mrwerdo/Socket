@@ -340,11 +340,39 @@ public class Socket {
         }
     }
 }
+// MARK: - Unavailable
+extension Socket {
+    @available(*, unavailable, renamed="bindTo(address:port:)")
+    public func bind(toAddress address: AddrInfo, port: Int32) throws {
+        fatalError("calling unavailable method")
+    }
+    @available(*, unavailable, renamed="bindTo(host:port:)")
+    public func bind(toAddress hostname: String, port: Int32) throws {
+        fatalError("calling unavailable method")
+    }
+    @available(*, unavailable, renamed="bindTo(file:shouldUnlink:)")
+    public func bind(toFile file: String, shouldUnlink unlinkFile: Bool = true)
+        throws {
+        fatalError("calling unavailable method")
+    }
+    @available(*, unavailable, renamed="connectTo(host:port:)")
+    public func connect(to hostname: String, port: Int32) throws {
+        fatalError("calling unavailable method")
+    }
+    @available(*, unavailable, renamed="connectTo(address:port:)")
+    public func connect(to address: AddrInfo, port: Int32) throws {
+        fatalError("calling unavailable method")
+    }
+    @available(*, unavailable, renamed="sendTo(_:data:length:flags:maxSize:")
+    public func send(to address: AddrInfo, data: UnsafePointer<Void>, length: Int, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
+        fatalError("calling unavailable method")
+    }
+}
+// MARK: End Unavailable
+// MARK: -
 
 extension Socket {
 
-    // TODO: Write a better description
-    // TODO: Test this function
     /// Binds the socket to the given address and port without performing any
     /// name resolution.
     ///
@@ -364,7 +392,7 @@ extension Socket {
     ///
     /// [1]: x-man-page://2/bind
     /// [2]: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
-    public func bind(toAddress address: AddrInfo, port: Int32) throws {
+    public func bindTo(address address: AddrInfo, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
@@ -379,6 +407,7 @@ extension Socket {
         }
         self.address = address
     }
+    
     /// Binds the socket to the given hostname and port, performing host name
     /// resolution.
     ///
@@ -386,15 +415,17 @@ extension Socket {
     /// address. This allows for a connection to be established and for
     /// communication to commence.
     ///
-    /// This function uses `getaddrinfo(hostname:service:hints:)` for obtaining
-    /// an address, and passes a copy of `self.address` as the parameter for 
-    /// hints. To pass any hints to `getaddrinfo(host:service:hints)`
-    /// set them on `self.address`. Upon a successful call to bind,
-    /// `self.address` will be updated with the new address assigned.
+    /// This function attepts to resolve `hostname` and find a valid address.
+    /// `Hostname` may be either a hostname string, a numeric IPv4 address, or a
+    /// numeric IPv6 address.
     ///
     /// - Remark:
     ///     Depending on the protocol, you must also call `listen(_:)` in order
-    ///     to recieve incomming connections.
+    ///     to recieve incomming connections. In addition, modifiying 
+    ///     `self.address` affects the hints being passed to
+    ///     `getaddrinfo(hostname:service:hints:)` since is used to resolve
+    ///     addresses.
+    ///
     ///
     /// - Seealso:
     ///     - [The bind man page][1]
@@ -414,7 +445,7 @@ extension Socket {
     ///     - `SocketError.CreationFailed`
     ///     - `SocketError.CloseFailed`
     ///     - `SocketError.SetSocketOptionFailed`
-    public func bind(toAddress hostname: String, port: Int32) throws {
+    public func bindTo(host hostname: String, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
@@ -464,12 +495,12 @@ extension Socket {
     ///                         `unlinkFile` is `false`, then the call to bind 
     ///                         will fail.
     /// - Seealso:
-    ///     - `bind(toAddress:port:)`
+    ///     - `bindTo(host:port:)`
     ///     - [The bind man pages](x-man-page://2/bind)
     /// - Throws:
     ///     - `SocketError.BindFailed`
     ///     - `SocketError.UnlinkFailed`
-    public func bind(toFile file: String, shouldUnlink unlinkFile: Bool = true)
+    public func bindTo(file file: String, shouldUnlink unlinkFile: Bool = true)
         throws {
             let length = file.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
             var addr_un = sockaddr_un()
@@ -545,7 +576,7 @@ extension Socket {
     ///     - `SocketError.CloseFailed`
     ///     - `SocketError.SetSocketOptionFailed`
     ///     - `SocketError.NoAddressesAvailable`
-    public func connect(to hostname: String, port: Int32) throws {
+    public func connectTo(host hostname: String, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
@@ -585,7 +616,7 @@ extension Socket {
     /// A successful call with result in teh socket being associated with the 
     /// address and port given.
     /// 
-    /// For a full description, checkout `connect(toAddress:port:)`
+    /// For a full description, checkout `connectTo(address:port:)`
     /// 
     /// - parameter address:    The address the socket will connect to.
     /// - parameter port:       A non-negative integer. Note that some ports
@@ -594,7 +625,7 @@ extension Socket {
     /// - Throws:
     ///     - `SocketError.ParameterError`
     ///     - `SocketError.ConnectFailed`
-    public func connect(to address: AddrInfo, port: Int32) throws {
+    public func connectTo(address address: AddrInfo, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
@@ -683,7 +714,7 @@ extension Socket {
 	///						The number of bytes sent.
 	/// - Throws:
 	///		- `SocketError.SendToFailed`
-    public func send(to address: AddrInfo, data: UnsafePointer<Void>,
+    public func sendTo(address: AddrInfo, data: UnsafePointer<Void>,
         length: Int, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
 			var data = data 
             var bytesleft = length

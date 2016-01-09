@@ -82,7 +82,7 @@ func testTCPConnect() {
     
     do {
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
-        try socket.connect(to: "andrews-imac.local", port: 5000)
+        try socket.connectTo(host: "andrews-imac.local", port: 5000)
         try socket.send(data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding), flags: 0)
         try socket.close()
     } catch let e as SocketError {
@@ -107,7 +107,7 @@ func testTCPServer() {
         var shouldStop = false
         
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
-        try socket.bind(toAddress: "localhost", port: 5000)
+        try socket.bindTo(host: "localhost", port: 5000)
         try socket.listen(5)
         while !shouldStop {
             let incoming = try socket.accept()
@@ -188,7 +188,7 @@ func testGetAddrInfoNoMemoryLeaks() {
 func testTCPLocalSocket() {
     do {
         let socket = try Socket(domain: DomainAddressFamily.Local, type: SocketType.Stream, proto: .Other(0))
-        try socket.bind(toFile: "/tmp/mytcpsocket")
+        try socket.bindTo(file: "/tmp/mytcpsocket")
         try socket.listen(5)
         while true {
             let incomming = try socket.accept()
@@ -222,7 +222,7 @@ func testUDPSendTo() {
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Datagram, proto: CommunicationProtocol.UDP)
         for address in try getaddrinfo(host: "localhost", service: nil, hints: &socket.address.addrinfo) {
             try address.setPort(5000)
-            try socket.send(to: address, data: data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding))
+            try socket.sendTo(address, data: data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding))
         }
     } catch let e as SocketError {
         switch e {
@@ -233,11 +233,10 @@ func testUDPSendTo() {
         }
     } catch {}
 }
-
 func testUDPRecv() {
     do {
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Datagram, proto: CommunicationProtocol.UDP)
-        try socket.bind(toAddress: "localhost", port: 5000)
+        try socket.bindTo(host: "localhost", port: 5000)
         
         while true {
             if let message = try socket.recv(1024) {
@@ -269,7 +268,7 @@ func testGetnameInfo() {
     do {
         let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
         let address = try getaddrinfo(host: "15M216063.local", service: nil, hints: &socket.address.addrinfo)
-        try socket.connect(to: address.first! , port: 5000)
+        try socket.connectTo(address: address.first! , port: 5000)
         try socket.send("Hello, World!")
         if let peer = socket.peerAddress {
             print(peer.hostname)
@@ -299,7 +298,7 @@ func testGetnameInfo() {
 func testMoreTCPServerStuff() {
     do {
         let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-        try socket.bind(toAddress: "andrews-imac.local", port: 5000)
+        try socket.bindTo(host: "andrews-imac.local", port: 5000)
         if let hostname = socket.address.hostname {
             print("Bound server to \(hostname) on port 5000...")
         }
