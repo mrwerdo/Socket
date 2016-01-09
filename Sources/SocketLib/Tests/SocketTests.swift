@@ -7,20 +7,21 @@
 //
 
 // import Socket
+import Darwin
 
-/// IPv4, SOCK_STREAM, IPPROTO_TCP, host=localhost, port=5000
-func testThatItStillWorksForInsaneUsers() {
+/// IPv4, SOCK_STREAM, IPPROTO_TCP, port=5000
+func testThatItStillWorksForInsaneUsers(domain: DomainAddressFamily, _ hostname: String) {
     let shouldPrint = true
     let shouldCrash = true
     for i in 1...1_000 {
         do {
-            let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+            let socket = try Socket(domain: domain, type: .Stream, proto: .TCP)
             try socket.setShouldReuseAddress(true)
-            try socket.bind(toAddress: "localhost", port: 5000)
+            try socket.bind(toAddress: hostname, port: 5000)
             try socket.listen(1)
             
-            let client = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-            try client.connect(to: "localhost", port: 5000)
+            let client = try Socket(domain: domain, type: .Stream, proto: .TCP)
+            try client.connect(to: hostname, port: 5000)
             
             let peer = try socket.accept()
             let data = "hello, world! I'm in the loop at: \(i)"
