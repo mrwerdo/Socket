@@ -23,19 +23,24 @@ To create, connect and send data on a TCP socket do:
 ```
 let data = "Hello, TCP!"
 let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-try socket.connect(toAddress: "hostname", port: 5000)
-try socket.send(data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding), flags: 0)
+try socket.send(data)
 try socket.close()
 ```
 
 To create and send data over a UDP socket, do:
 ```
 let data = "Hello, UDP!"
+let destinationHost = "localhost"
 let socket = try Socket(domain: .INET, type: .Datagram, proto: .UDP)
-for address in try getaddrinfo(host: "hostname", service: nil, hints: &socket.address.addrinfo) {
-  // Choose your address here. You may not want to send to every address matching the address and hostname.
-  try address.setPort(5000)
-  try socket.send(to: address, data: data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding))
+for address in try getaddrinfo(host: destinationHost, service: nil, hints: &socket.address.addrinfo) {
+    do {
+        let length = data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
+        try address.setPort(500)
+        try socket.sendTo(address, data: data, length: length)
+        break // only send once
+    } catch {
+        continue
+    }
 }
 try socket.close()
 ```
@@ -44,31 +49,42 @@ Recieving data is just as simple...
 
 For a TCP socket, do:
 ```
+let sendingHost = "localhost"
 let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-try socket.connect(toAddress: "hostname", port: 5000)
-if let message = try socket.recv(1024) {
-  if let decoded_str = String.fromCString(UnsafePointer(message.data)) {
-    print("Obtained new message: \(decoded_str)")
-  } else {
-    print("Error decoding message!")
-  }
-} else {
-  print("Connection closed.")
+try socket.connectTo(host: sendingHost, port: 5000)
+
+do {
+    guard let message = try socket.recv(1024) else {
+        return // connection closed
+    }
+    if let data = String.fromCString(UnsafePointer(message.data)) {
+        print("New message \(message.length) bytes long: \(data)")
+    } else {
+        print("Error decoding message!")
+    }
+} catch SocketError.RecvTryAgain {
+    // non-fatal error, try again some time since no data available
 }
 try socket.close()
 ```
 
 For a UDP socket, do:
 ```
-let socket = try Socket(domain: .INET, type: .Datagram, proto: .UDP)
-try socket.bind(toAddress: "hostname", port: 5000)
-if let message = try socket.recv(1024) {
-  if let str = String.fromCString(UnsafePointer(message.data)) {
-    print("Obtained new message: \(str)")
-  } else {
-    print("Error decoding message!")
-  }
-} // will never get here, UDP is connectionless
+let recievingHost = "localhost"
+let socket = try Socket(domain: .INET, type: .Stream, proto: .UDP)
+try socket.bindTo(host: recievingHost, port: 5000)
+
+do {
+    let message = try socket.recv(1024)! // UDP is connectionless
+    if let data = String.fromCString(UnsafePointer(message.data)) {
+        print("New message \(message.length) bytes long: \(data)")
+    } else {
+        print("Error decoding message!")
+    }
+} catch SocketError.RecvTryAgain {
+    // non-fatal error, try again some time since no data available
+}
+try socket.close()
 ```
 
 # How do I get started?
@@ -85,7 +101,7 @@ let package = Package(name: "An Example Projcet",
 		]
 )	
 ```
-The url should point to **this** repository, using https. The name parameter is the name of your project. 
+The url should point to **this** repository, using https. The name parameter is the name of your project.
 
 Finally, for those of you who don't really know anythng about the swift package manager, create a file named Package.swift and put the above code in it. This bascially a manifest file. Change the program name if you want, etc. Then create a file named main.swift. Put this in it:
 ```
@@ -104,63 +120,77 @@ This approach is not without reason. Every C function which is being called all 
 So how does this work? Below is a realtivly full example of error handling for a TCP server. This is a simple fail approch to handling any errors - as soon as an error occurs, fail.
 ```
 do {
-  var shouldStop = false
+    let recievingHost = "localhost"
+    var shouldRun = true
+
+    let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+    try socket.setShouldReuseAddress(true)
+    try socket.bindTo(host: recievingHost, port: 5000)
+    try socket.listen(5)
+
+    mainLoop: while shouldRun {
+        let client = try socket.accept()
     
-  let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
-  try socket.bind(toAddress: "localhost", port: 5000)
-  try socket.listen(5)
-  while !shouldStop {
-    let incoming = try socket.accept()
-    if let message = try incoming.recv(1024) {
-      if let str = String.fromCString(UnsafePointer<Int8>(message.data)) {
-        if str == "stop" {
-          shouldStop = true
-        } else {
-          print("New message: \(str)")
+        recvLoop: while true {
+            do {
+                guard let message = try client.recv(1024) else {
+                    try client.close()
+                    break recvLoop
+                }
+                if let data = String.fromCString(UnsafePointer(message.data)) {
+                    switch data {
+                        case "STOP":
+                        shouldRun = false
+                        break recvLoop
+                    default:
+                        print("New message \(message.length) bytes long: \(data)")
+                    }
+                } else {
+                    print("Error decoding message!")
+                }
+            } catch SocketError.RecvTryAgain {
+                continue recvLoop   
+            }
         }
-      } else {
-        print("Error recieving data.")
-      }
+        try client.send("Goodbye!")
+        try client.close()
     }
-    try incoming.close()
-  }
-  print("done")
-  try socket.close()
+    try socket.close()
 } catch let e as SocketError {
-  switch e {
-  case .BindFailed(let n):
-    print("Bind failed: \(String.fromCError(n))")
-  case .ListenFailed(let n):
-    print("Listen failed: \(String.fromCError(n))")
-  case .AcceptFailed(let n):
-    print("Accept failed: \(String.fromCError(n))")
-  case .RecvFromFailed(let n):
-    print("Recv failed: \(String.fromCError(n))")
-  case .RecvTryAgain:
-    print("This should really be handled in the recieve code above.")
-  case .CloseFailed(let n):
-    print("Close failed: \(String.fromCError(n))")
-  case .ParameterError(let str):
-    print("Parameter error: \(str)")
-  case .NoAddressesFound(let reason, let errors):
-    print("No addresses found: \(reason)")
-    print("Reasons: ", terminator: "")
-    errors.forEach { print(String.fromCError($0), terminator: ", ") }
-    print("")
-  default:
-    print("Unknown error: \(e)")
-  }
-} catch let e as NetworkUtilitiesError {
-  switch e {
-  case .GetAddressFailed(let n):
-    print("Get address info failed: \(String.fromCError(n))")
-  case .ParameterError(let str):
-    print("Parameter error: \(str)")
-  default:
-    print("Unknown error: \(e)")
-  }
-} catch let e {
-  print("Unknown error: \(e)")
+    func emsg(n: Int32) -> String {
+    return String.fromCError(n)
+    }
+    switch e {
+    case .CreationFailed(let n):
+        print("Could not create socket: \(emsg(n))")
+    case .BindFailed(let n):
+        print("Bind failed: \(emsg(n))")
+    case .ListenFailed(let n):
+        print("Listen failed: \(emsg(n))")
+    case .AcceptFailed(let n):
+        print("Accept failed: \(emsg(n))")
+    case .RecvFromFailed(let n):
+        print("Recieve from failed: \(emsg(n))")
+    case .SendToFailed(let n):
+        print("Send failed: \(emsg(n))")
+    case .CloseFailed(let n):
+        print("Close failed: \(emsg(n))")
+    case .ParameterError(let reason):
+        print("Invalid parameter: \(reason)")
+    case .SetSocketOptionFailed(let n):
+        print("Setting socket options failed: \(emsg(n))")
+    case .NoAddressesFound(let reason, let errors):
+        print("No addresses found: \(reason)", terminator: "; ")
+        print("Reasons:", terminator: "")
+        errors.dropLast().forEach { print(emsg($0), terminator: ", ") }
+        if let last = errors.last {
+            print(emsg(last))
+        }
+    default:
+        print("Unknown handled error: \(e)")
+    }
+} catch {
+    errmsg(error) // other, possible future, errors
 }
 ```
 
