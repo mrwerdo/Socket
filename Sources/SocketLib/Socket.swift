@@ -493,7 +493,7 @@ extension Socket {
     /// - parameter unlinkFile: `true` if the file should be removed, otherwise
     ///                         `false`. If the file exsists and
     ///                         `unlinkFile` is `false`, then the call to bind 
-    ///                         will fail.
+    ///                         will fail. The default is `true`.
     /// - Seealso:
     ///     - `bindTo(host:port:)`
     ///     - [The bind man pages](x-man-page://2/bind)
@@ -644,6 +644,37 @@ extension Socket {
         }
         self.address = address
     }
+    /// Connects the socket given file address on the system.
+    ///
+    /// A successful call will result in the socket being associated with the
+    /// file on the system. This allows communication similar to `PIPE`, between
+    /// processes on the local system.
+    ///
+    /// - Note: The socket's family must be of type `DomainAddressFamily.Local`.
+    /// - parameters:
+    ///     - path:         The file path to connect to.
+    public func connectTo(file file: String) throws {
+        let length = file.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
+        var addr_un = sockaddr_un()
+        addr_un.sun_family = sa_family_t(address.addrinfo.ai_family)
+        addr_un.setPath(file, length: length)
+        
+        UnsafeMutablePointer<Darwin.sockaddr_un>(
+            address.addrinfo.ai_addr
+        ).memory = addr_un
+        address.addrinfo.ai_addrlen = socklen_t(sizeof(sockaddr_un))
+        
+        guard Darwin.connect(
+            fd,
+            address.addrinfo.ai_addr,
+            address.addrinfo.ai_addrlen
+            ) == 0
+        else {
+            throw SocketError.ConnectFailed(errno)
+        }
+        
+    }
+    
 }
 extension Socket {
 	/// Sends `data` to the connected peer

@@ -30,11 +30,9 @@ public class AddrInfo : CustomDebugStringConvertible {
         if let hostname = String.fromCString(addrinfo.ai_canonname) {
             return hostname
         }
-        do {
-            if let hostname = try getnameinfo(self).hostname {
-                return hostname
-            }
-        } catch {}
+        if let hostname = try? getnameinfo(self).hostname {
+            return hostname
+        }
         return nil
     }
     @available(*, unavailable, renamed="hostname")
