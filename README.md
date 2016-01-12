@@ -89,8 +89,7 @@ try socket.close()
 
 # How do I get started?
 
-This project is compatiable with the [swift package manager](https://swift.org/package-manager/). To use it in your project,
-add a dependency to your project as such:
+This project is compatible with the [swift package manager](https://swift.org/package-manager/). To use it in your project, place the code snipit below into your `Package.swift` file. This is the manifest file which declares the different code modules in your package.
 
 ```
 import PackageDescription
@@ -101,23 +100,26 @@ let package = Package(name: "An Example Projcet",
 		]
 )	
 ```
-The url should point to **this** repository, using https. The name parameter is the name of your project.
+**Note**: The url should point to **this** repository, using https. The name parameter is the name of your project.
 
-Finally, for those of you who don't really know anythng about the swift package manager, create a file named Package.swift and put the above code in it. This bascially a manifest file. Change the program name if you want, etc. Then create a file named main.swift. Put this in it:
+To create a simple executable with the package manager, create a file called `main.swift` in the same directory as the `Package.swift` file, and copy the code below into it.
+
 ```
 import Socket
 let hostname = try gethostname()
 print(hostname)
 ```
-Then run `$ swift build`, then run the output executable (i.e. `$ .build/debug/programname`), and you shoud see the hostname of your computer.
+
+Execute `$ swift build`, then run the output executable (e.g. `$ .build/debug/programname`). You will see the hostname of your computer.
 
 # Error Handling
 
-Almost every function throws their own specific error case, allowing for very precise error handling. As such, it is easy to identify which function calls were the cause of the error and respond appropriately.
+Doing networking right means to handle every error possible in a clean and appropiate manner. Every function which will fail will through an error, which will allow the user of this library to implement their own error handling code. Functions which wrap around system calls that fail will an error number as an associate value. Check the inline documentation for a brief description of the errors, and refer to the manual pages for more information. Every function also includes inline documentation - including the errors thrown, so it is easy to know what errors are thrown and handle them appropiately.
 
-This approach is not without reason. Every C function which is being called all return many errors, and since this is a library, it is appropriate to return these errors to the caller and let them deal with it.
+Below is an example of a simple TCP server - Upon encountering an error, fail. I've tried to show as many errors as possible, to show what types of errors are possible.
 
-So how does this work? Below is a realtivly full example of error handling for a TCP server. This is a simple fail approch to handling any errors - as soon as an error occurs, fail.
+**Note**: This implementation, although it does work, is not performing in an optimal way. It could be further improved by introducing the `select(2)` system call, or by using asynchronous operations (e.g. GCD).
+
 ```
 do {
     let recievingHost = "localhost"
@@ -190,9 +192,14 @@ do {
         print("Unknown handled error: \(e)")
     }
 } catch {
-    errmsg(error) // other, possible future, errors
+    errmsg(error) // other, possible future, errors, which may be implemented
 }
 ```
 
-# That's it at the moment.
-Feel free to add any comments, improvements, etc. They would be much appreciated.
+# TODOs
+- Implement `select(2)` functionality
+- Make casting platform independant (hard coded types are used currently)
+- Implement non-blocking sockets (however, requires `c` code)
+- Contiune implementing tests
+- Learn how to do continuous intergration
+- Do may math homework...
