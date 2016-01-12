@@ -2,20 +2,24 @@
 A low level socket library written in swift for beaming data across the internet!
 
 # Description
-Swift-Sockets is a socket wrapper for the BSD C socket layer. It provides convenient access to the socket layer, allowing various types of connections to be created. Swift-Sockets also embraces Swift`s new error model, allowing for advanced error handling while still maintaining easy to read code.
+Swift-Sockets is a socket wrapper for the BSD C socket layer. It provides convenient access to the socket layer, allowing various types of connections to be created. Swift-Sockets also embraces Swift's new error model, allowing for advanced error handling while still maintaining easy to read code.
 
 # What can you do?
 
 Send data accross the internet. Seriously.
 
-Specifically, I've tested:
-- Sending data over a TCP & UDP connection to python
-- Recieving data over a TCP & UDP connection from python
-- Getting the host name
-- Setting the host name (requires root)
-- Resolving host names using getaddrinfo
+The library is a wrapper for the C API, so it's use is prety versatile. Typical
+use for sockets is to send information over a reliable connection formed using 
+`TCP/IP`, or `TCP/IPv6`. In addition user datagram sockets and local sockets
+are supported too. 
 
-More will come in the future.
+It is possible to use other family types, socket types, and protocols - however
+the use of other protocols is pretty uncommon, as far as I can tell scouring the
+internet. Raw sockets can be used, however I have found that on a mac, they are
+pretty limited without doing any extra work (i.e. lots of platform specific 
+code which uses fcntl's to configure the networking card just right).
+
+Anyway, enough rambling...
 
 # How do you use it?
 
@@ -68,7 +72,7 @@ do {
 try socket.close()
 ```
 
-For a UDP socket, do:
+And for a UDP socket, do:
 ```
 let recievingHost = "localhost"
 let socket = try Socket(domain: .INET, type: .Stream, proto: .UDP)
@@ -202,4 +206,5 @@ do {
 - Implement non-blocking sockets (however, requires `c` code)
 - Contiune implementing tests
 - Learn how to do continuous integration
+- Investegate linux compatability
 - Do may math homework...
