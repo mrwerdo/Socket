@@ -201,5 +201,5 @@ do {
 - Make casting platform independant (hard coded types are used currently)
 - Implement non-blocking sockets (however, requires `c` code)
 - Contiune implementing tests
-- Learn how to do continuous intergration
+- Learn how to do continuous integration
 - Do may math homework...
