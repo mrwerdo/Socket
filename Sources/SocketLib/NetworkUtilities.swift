@@ -53,10 +53,17 @@ private func unsafeAddressOfCObj<T: Any>(obj: UnsafeMutablePointer<T>) ->
 
 /// Converts the bytes of `value` from network order to host order.
 public func ntohs(value: CUnsignedShort) -> CUnsignedShort {
-    return (value << 8) + (value >> 8)
+    if value.byteSwapped == value.bigEndian && value == value.littleEndian {
+        return value.littleEndian
+    } else {
+        return value.bigEndian
+    }
 }
 /// Converts the bytes of `value` from host order to network order.
-public let htons = ntohs
+public func htons(value: CUnsignedShort) -> CUnsignedShort {
+    // Network byte order is always `bigEndain`.
+    return value.bigEndian
+}
 
 /// WARNING: Don't use, I don't know what it does...
 //public func ntohs_char(value: Int8) -> Int8 {
