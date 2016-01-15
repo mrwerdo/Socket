@@ -1,4 +1,4 @@
-# Swift-Sockets
+# Sockets for Swift!
 A low level socket library written in swift for beaming data across the internet!
 
 # Description
