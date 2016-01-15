@@ -1,8 +1,19 @@
 import PackageDescription
-// Package information stuff.
+import Darwin
 
-let libraryTarget = Target(name: "Library")
-let dev = Target(name: "dev", dependencies: [.Target(name: "Library")])
+var targets: [Target] = []
+/// The public interface to the library
+targets.append(Target(name: "Library"))
 
-let package = Package(name: "SocketLib", targets: [libraryTarget, dev])
+var buffer = [CChar](count: 1024, repeatedValue: 0)
+if let workingDir = String.fromCString(getcwd(&buffer, 1024))
+{
+    if access ("./Sources/dev/main.swift", F_OK) != -1 {
+        /// My developer environment - it's private
+        let dev = Target(name: "dev", dependencies: [.Target(name: "Library")])
+        targets.append(dev)
+    }
+}
+
+let package = Package(name: "SocketLib", targets: targets)
 
