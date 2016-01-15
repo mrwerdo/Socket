@@ -10,18 +10,21 @@ import Foundation
 
 /// The `type` of socket, which specifies the semantics of communication.
 public enum SocketType {
-    /// Sends packets reliably, and ensuring they arrive in the same order as
+    /// Sends packets reliably and ensures they arrive in the same order that
     /// they were sent in.
     case Stream
     /// Sends packets unreliably and quickly, not guarenteeing the arival or
-    /// the arival order.
+    /// the arival order of any packets sent.
     case Datagram
     /// Provides access to the raw communication model. This is restricted to
-    /// the super-user.
+    /// the super-user. It creates no additional header information, and as 
+    /// such, can be used to inspect and send packets of all protocol types.
+    /// **Note**:   Depending on the system, the actual ability of a raw socket
+    ///             may vary. They are not very portable.
     case Raw
     
-    /// Returns the integer associated with `self` for use with the networking
-    /// calls.
+    /// Returns the integer associated with `self` listed in the 
+    /// `<sys/socket.h>` header file.
     var systemValue: Int32 {
         switch self {
         case .Stream:
@@ -42,18 +45,14 @@ public enum DomainAddressFamily {
     /// Host-internal protocls, deprecated, use Local
     @available(OSX, deprecated=10.11, renamed="Local")
     case UNIX
-    /// Internet version 4 protocols
+    /// Internet Version 4 Protocol
     case INET
-    /// Internal Rounting protocols
-    case Route
-    /// Internal key-management function
-    case Key
-    /// Internet version 6 protocol
+    /// Internet Version 6 Protocol
     case INET6
-    /// System domain
-    case System
-    /// Raw access to network device
-    case NDRV
+    /// The unspecified protocl, signifying that any protocol is accepted.
+    case Unspecified
+    /// Used to specify different protocol to use.
+    case Other(Int32)
     
     /// Returns the integer associated with `self` for use with the networking
     /// calls.
@@ -65,16 +64,12 @@ public enum DomainAddressFamily {
             return PF_UNIX
         case .INET:
             return PF_INET
-        case .Route:
-            return PF_ROUTE
-        case .Key:
-            return PF_KEY
         case .INET6:
             return PF_INET6
-        case .System:
-            return PF_SYSTEM
-        case .NDRV:
-            return PF_NDRV
+        case .Unspecified:
+            return PF_UNSPEC
+        case .Other(let n):
+            return n
         }
     }
 }

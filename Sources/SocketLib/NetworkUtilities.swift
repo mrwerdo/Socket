@@ -65,12 +65,6 @@ public func htons(value: CUnsignedShort) -> CUnsignedShort {
     return value.bigEndian
 }
 
-/// WARNING: Don't use, I don't know what it does...
-//public func ntohs_char(value: Int8) -> Int8 {
-//    return (value << 8) + (value >> 8)
-//}
-//
-
 extension String {
     /// Returns an underlying c buffer.
     /// - Warning: Deallocate the pointer when done to aviod memory leaks.
