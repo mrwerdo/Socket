@@ -153,6 +153,9 @@ public enum SocketError : ErrorType {
     /// Thrown when a call to `Darwin.setsockopt()` fails. The associate value
     /// holds the error number returned.
     case SetSocketOptionFailed(Int32)
+    /// Thrown when a call to `Darwin.getsockopt()` fails. The associate value
+    /// holds the error number returned.
+    case GetSocketOptionFailed(Int32)
     /// Thrown when a call to `Darwin.shutdown()` fails. The associate value
     /// holds the error number returned.
     case ShutdownFailed(Int32)
@@ -1001,12 +1004,12 @@ extension Socket {
 	/// already in use.
 	/// 
 	/// - Note:
-	/// If `bind` is failing because the 'address is already in use', then
-	/// this will allow the system to reuse that address. This problem is
-	/// caused by the peer's connection lingering and staying open, preventing
-	/// the sockets form fully by destroyed, and thus, preventing the address
-	/// from being used again.
-	///
+    /// If 'bind' fails because the 'address is already in use' then setting
+    /// this option to `true` will allow the address to be reused. This scenario
+    /// occurs when the a connection on the same address is still lingering.
+    /// It is especially useful during testing as it removes unnessesary time
+    /// between runs.
+    ///
 	///	- parameter value:	`true` to allow reuse of the address, `false` to 
 	///						disallow reuse of the address.
 	/// - Throws:
@@ -1023,6 +1026,52 @@ extension Socket {
         ) != -1 else {
             throw SocketError.SetSocketOptionFailed(errno)
         }
+    }
+    
+    /// Sets the specified socket option.
+    ///
+    /// See [the man pages](x-man-page://2/setsockopt) for more details.
+    ///
+    /// - parameters:
+    ///     - layer:        The layer which the option is to be interpreted for.
+    ///                     Default is `SOL_SOCKET`.
+    ///     - option:       The specified option to set.
+    ///     - value:        The value of the option.
+    /// - Throws:
+    ///     - `SocketError.SetSocketOptionFailed`
+    public func setSocketOption(layer: Int32 = SOL_SOCKET, option: Int32,
+        value: UnsafePointer<Void>, valueLen: socklen_t) throws {
+            guard Darwin.setsockopt(
+                fd,
+                layer,
+                option,
+                value,
+                valueLen
+            ) == 0 else {
+                throw SocketError.SetSocketOptionFailed(errno)
+            }
+    }
+    /// Gets the specified socket option.
+    ///
+    /// See [the man pages](x-man-page://2/getsockopt) for more details.
+    ///
+    /// - parameters:
+    ///     - layer:        The layer which the option is to be interpreted for.
+    ///                     Default is `SOL_SOCKET`.
+    ///     - option:       The specified option to get.
+    ///     - value:        A buffer which will be filled with the result.
+    ///     - valueLen:     The length of the buffer.
+    public func getSocketOption(layer: Int32 = SOL_SOCKET, option: Int32,
+        value: UnsafeMutablePointer<Void>, inout valueLen: socklen_t) throws {
+            guard Darwin.getsockopt(
+                fd,
+                layer,
+                option,
+                value,
+                &valueLen
+            ) == 0 else {
+                throw SocketError.SetSocketOptionFailed(errno)
+            }
     }
 }
 
