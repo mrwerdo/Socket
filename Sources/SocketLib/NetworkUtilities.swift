@@ -68,7 +68,7 @@ public func htons(value: CUnsignedShort) -> CUnsignedShort {
 extension String {
     /// Returns an underlying c buffer.
     /// - Warning: Deallocate the pointer when done to aviod memory leaks.
-    public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
+public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
         return self.withCString { (ptr: UnsafePointer<Int8>) ->
             (UnsafeMutablePointer<Int8>, Int) in
             let len = self.utf8.count

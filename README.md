@@ -95,6 +95,18 @@ try socket.close()
 
 This project is compatible with the [swift package manager](https://swift.org/package-manager/). To use it in your project, place the code snipit below into your `Package.swift` file. This is the manifest file which declares the different code modules in your package.
 
+**Note**: The below code sample doesn't work. Instead, clone the repository and reference it via a realitive url.
+
+```swift
+import PackageDescription
+
+let package = Package(
+    name: "An Example Project",
+    dependencies: [ .Package(url: "../../path/to/Socket/.git", majorVersion: 1)]
+)
+```
+
+~~
 ```
 import PackageDescription
 
@@ -105,6 +117,7 @@ let package = Package(name: "An Example Projcet",
 )	
 ```
 **Note**: The url should point to **this** repository, using https. The name parameter is the name of your project.
+~~
 
 To create a simple executable with the package manager, create a file called `main.swift` in the same directory as the `Package.swift` file, and copy the code below into it.
 
