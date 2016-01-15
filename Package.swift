@@ -1,8 +1,8 @@
 import PackageDescription
 // Package information stuff.
 
-let libraryTarget = Target(name: "SocketLib")
-let dev = Target(name: "dev", dependencies: [.Target(name: "SocketLib")])
+let libraryTarget = Target(name: "Library")
+let dev = Target(name: "dev", dependencies: [.Target(name: "Library")])
 
 let package = Package(name: "Socket", targets: [libraryTarget, dev])
 
