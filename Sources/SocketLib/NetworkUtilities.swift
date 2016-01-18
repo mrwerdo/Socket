@@ -46,7 +46,7 @@ public enum NetworkUtilitiesError : ErrorType {
 /// that the object exsists throughout the whole lifetime this pointer will 
 /// be used, which is typically done by ensuring the object lives within the
 /// same, or higher scope as the pointer.
-private func unsafeAddressOfCObj<T: Any>(obj: UnsafeMutablePointer<T>) ->
+internal func unsafeAddressOfCObj<T: Any>(obj: UnsafeMutablePointer<T>) ->
     UnsafeMutablePointer<T> {
     return obj
 }

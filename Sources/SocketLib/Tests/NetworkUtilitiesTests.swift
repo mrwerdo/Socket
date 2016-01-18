@@ -321,3 +321,59 @@ func testMoreTCPServerStuff() {
         print(error)
     }
 }
+
+func testASimpleSelectServer() {
+    do {
+        var shouldRun = true
+        var readSet = fd_set()
+        var clients: [Socket] = []
+        
+        let server = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+        try server.setShouldReuseAddress(true)
+        try server.bindTo(host: "localhost", port: 5000)
+        try server.listen(5)
+        
+        readSet.add(server)
+        print(readSet)
+        print("Running server on localhost, port 5000")
+        while shouldRun {
+            var (_, readReady, _, _) = try select(readSet, write: nil, error: nil, timeout: nil)
+            if readReady.isSet(server) {
+                let newPeer = try server.accept()
+                clients.append(newPeer)
+                readSet.add(newPeer)
+                print("New client connected: \(newPeer.peerAddress?.hostname)")
+            }
+            for client in clients {
+                if readReady.isSet(client) {
+                    if let message = try client.recv(1024) {
+                        if let str = String.fromCString(UnsafePointer(message.data)) {
+                            print("Recieved a new message from \(client.peerAddress?.hostname ?? "unknown"): \(str)")
+                            try client.send("I recieved your message!")
+                            if str == "stop" {
+                                try client.send("Shutting down now!")
+                                shouldRun = false
+                            }
+                        } else {
+                            print("Error decoding data!")
+                            try client.send("Error decoding data!")
+                        }
+                    } else {
+                        readSet.remove(client)
+                        let index = clients.indexOf { client.fd == $0.fd }!
+                        clients.removeAtIndex(index)
+                        print("Client \(client.peerAddress?.hostname ?? "unknown") disconnected")
+                        try client.close()
+                    }
+                }
+            }
+        }
+        for client in clients {
+            try client.close()
+        }
+        try server.close()
+        
+    } catch {
+        print("Error: \(error)")
+    }
+}

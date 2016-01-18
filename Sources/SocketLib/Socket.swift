@@ -159,6 +159,9 @@ public enum SocketError : ErrorType {
     /// Thrown when a call to `Darwin.shutdown()` fails. The associate value
     /// holds the error number returned.
     case ShutdownFailed(Int32)
+    /// Thrown when a call to `Darwin.select()` fails. The associate value holds
+    /// the error number returned.
+    case SelectFailed(Int32)
 }
 /// A class for manipulating sockets, similar to the python module socket.
 /// What else is there to say, their sockets...
