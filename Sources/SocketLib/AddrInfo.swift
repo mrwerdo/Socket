@@ -27,23 +27,23 @@ public class AddrInfo : CustomDebugStringConvertible {
     }
     public var sockaddr_storage: UnsafeMutablePointer<Darwin.sockaddr_storage>
     public var hostname: String? {
-        if let hostname = String.fromCString(addrinfo.ai_canonname) {
+        if let hostname = String(utf8String: addrinfo.ai_canonname) {
             return hostname
         }
-        if let hostname = try? getnameinfo(self).hostname {
+        if let hostname = try? getnameinfo(address: self).hostname {
             return hostname
         }
         return nil
     }
-    @available(*, unavailable, renamed="hostname")
+    @available(*, unavailable, renamed:"hostname")
     public var canonname: String? {
         fatalError("unavailable function call")
     }
     /// Constructs the addresses so they all reference each other internally.
     public init() {
         addrinfo = Darwin.addrinfo()
-        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>.alloc(
-            sizeof(Darwin.sockaddr_storage)
+        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>(
+            allocatingCapacity: sizeof(Darwin.sockaddr_storage)
         )
         addrinfo.ai_canonname = nil
         addrinfo.ai_addr = sockaddr
@@ -61,35 +61,35 @@ public class AddrInfo : CustomDebugStringConvertible {
     }
     public init(copy addr: Darwin.addrinfo) {
         addrinfo = addr
-        sockaddr_storage = UnsafeMutablePointer.alloc(
-            sizeof(Darwin.sockaddr_storage)
+        sockaddr_storage = UnsafeMutablePointer(
+            allocatingCapacity: sizeof(Darwin.sockaddr_storage)
         )
         if addr.ai_addr != nil {
-            sockaddr_storage.memory = UnsafeMutablePointer(addr.ai_addr).memory
+            sockaddr_storage.pointee = UnsafeMutablePointer(addr.ai_addr).pointee
         }
         addrinfo.ai_addr = sockaddr
         if addr.ai_canonname != nil {
             let length = Int(strlen(addr.ai_canonname) + 1)
-            addrinfo.ai_canonname = UnsafeMutablePointer<Int8>.alloc(length)
+            addrinfo.ai_canonname = UnsafeMutablePointer<Int8>(allocatingCapacity: length)
             strcpy(addrinfo.ai_canonname, addr.ai_canonname)
         }
     }
     deinit {
-        sockaddr_storage.dealloc(sizeof(Darwin.sockaddr_storage))
+        sockaddr_storage.deallocateCapacity(sizeof(Darwin.sockaddr_storage))
         if addrinfo.ai_canonname != nil {
             let length = Int(strlen(addrinfo.ai_canonname) + 1)
-            addrinfo.ai_canonname.dealloc(length)
+            addrinfo.ai_canonname.deallocateCapacity(length)
         }
     }
     
     public var debugDescription: String {
         var out = ""
-        let sockAddrStorage = sockaddr_storage.memory
+        let sockAddrStorage = sockaddr_storage.pointee
         print(addrinfo,
             sockAddrStorage,
             separator: ", ",
             terminator: "",
-            toStream: &out
+            to: &out
         )
         return out
     }
@@ -98,10 +98,10 @@ public class AddrInfo : CustomDebugStringConvertible {
             switch addrinfo.ai_family {
             case PF_INET:
                 let ipv4 = UnsafeMutablePointer<sockaddr_in>(addrinfo.ai_addr)
-                ipv4.memory.sin_port = htons(CUnsignedShort(port))
+                ipv4.pointee.sin_port = htons(value: CUnsignedShort(port))
             case PF_INET6:
                 let ipv6 = UnsafeMutablePointer<sockaddr_in>(addrinfo.ai_addr)
-                ipv6.memory.sin_port = htons(CUnsignedShort(port))
+                ipv6.pointee.sin_port = htons(value: CUnsignedShort(port))
             default:
                 throw SocketError.ParameterError("Trying to set a port on a"
                     + " structure which does not use ports.")

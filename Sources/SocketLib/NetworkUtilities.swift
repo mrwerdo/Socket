@@ -9,7 +9,7 @@
 import Darwin
 import Foundation
 
-public enum NetworkUtilitiesError : ErrorType {
+public enum NetworkUtilitiesError : ErrorProtocol {
     /// Thrown when an error occured within the Darwin module.
 
     /// Thrown by `gethostname()` when the system call failed. The associate
@@ -27,7 +27,7 @@ public enum NetworkUtilitiesError : ErrorType {
     /// **See Also**: x-man-page://getaddrinfo
     case GetAddressInfoFailed(Int32)
     
-    @available(*, unavailable, renamed="GetAddressInfoFailed")
+    @available(*, unavailable, renamed:"GetAddressInfoFailed")
     case GetAddressFailed(Int32)
     /// Thrown by `getnameinfo(
     case GetNameInfoFailed(Int32)
@@ -46,7 +46,7 @@ public enum NetworkUtilitiesError : ErrorType {
 /// that the object exsists throughout the whole lifetime this pointer will 
 /// be used, which is typically done by ensuring the object lives within the
 /// same, or higher scope as the pointer.
-internal func unsafeAddressOfCObj<T: Any>(obj: UnsafeMutablePointer<T>) ->
+internal func unsafeAddressOfCObj<T: Any>(_ obj: UnsafeMutablePointer<T>) ->
     UnsafeMutablePointer<T> {
     return obj
 }
@@ -72,7 +72,7 @@ public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
         return self.withCString { (ptr: UnsafePointer<Int8>) ->
             (UnsafeMutablePointer<Int8>, Int) in
             let len = self.utf8.count
-            let buffer = UnsafeMutablePointer<Int8>.alloc(len+1)
+            let buffer = UnsafeMutablePointer<Int8>(allocatingCapacity: len+1)
             for i in 0..<len {
                 buffer[i] = ptr[i]
             }
@@ -135,10 +135,10 @@ public func getaddrinfo(host hostname: String?, service serviceName: String?,
         
         defer {
             if hostname_val.len > 0 {
-                hostname_val.ptr.dealloc(hostname_val.len)
+                hostname_val.ptr.deallocateCapacity(hostname_val.len)
             }
             if servname_val.len > 0 {
-                hostname_val.ptr.dealloc(hostname_val.len)
+                hostname_val.ptr.deallocateCapacity(hostname_val.len)
             }
         }
         
@@ -154,8 +154,8 @@ public func getaddrinfo(host hostname: String?, service serviceName: String?,
         var addresses: [AddrInfo] = []
         var ptr = res_ptr
         while ptr != nil {
-            addresses.append(AddrInfo(copy: ptr.memory))
-            ptr = ptr.memory.ai_next
+            addresses.append(AddrInfo(copy: ptr.pointee))
+            ptr = ptr.pointee.ai_next
         }
         
         freeaddrinfo(res_ptr)
@@ -164,20 +164,20 @@ public func getaddrinfo(host hostname: String?, service serviceName: String?,
 
 public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws
     -> (hostname: String?, servicename: String?) {
-        var hostnameBuff = UnsafeMutablePointer<Int8>.alloc(Int(NI_MAXHOST))
-        var servicenameBuff = UnsafeMutablePointer<Int8>.alloc(Int(NI_MAXSERV))
+        var hostnameBuff = UnsafeMutablePointer<Int8>(allocatingCapacity: Int(NI_MAXHOST))
+        var servicenameBuff = UnsafeMutablePointer<Int8>(allocatingCapacity: Int(NI_MAXSERV))
         
         memset(hostnameBuff, 0, Int(NI_MAXHOST))
         memset(servicenameBuff, 0, Int(NI_MAXSERV))
         
         defer {
-            hostnameBuff.dealloc(Int(NI_MAXHOST))
-            servicenameBuff.dealloc(Int(NI_MAXSERV))
+            hostnameBuff.deallocateCapacity(Int(NI_MAXHOST))
+            servicenameBuff.deallocateCapacity(Int(NI_MAXSERV))
         }
         
         let success = Darwin.getnameinfo(
             address.sockaddr,
-            UInt32(address.sockaddr.memory.sa_len),
+            UInt32(address.sockaddr.pointee.sa_len),
             hostnameBuff,
             UInt32(NI_MAXHOST) * UInt32(sizeof(Int8)),
             servicenameBuff,
@@ -190,8 +190,8 @@ public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws
         }
         
         return (
-            String.fromCString(hostnameBuff),
-            String.fromCString(servicenameBuff)
+            String(utf8String: hostnameBuff),
+            String(utf8String: servicenameBuff)
         )
 }
 
@@ -206,7 +206,7 @@ public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws
 ///         the meaning of the error codes.
 public func gethostname() throws -> String? {
     let maxlength = Int(sysconf(_SC_HOST_NAME_MAX))
-    var cstring: [Int8] = [Int8](count: maxlength, repeatedValue: 0)
+    var cstring: [Int8] = [Int8](repeating: 0, count: 0)
     let result = Darwin.gethostname(
         &cstring,
         maxlength
@@ -214,7 +214,7 @@ public func gethostname() throws -> String? {
     guard result == 0 else {
         throw NetworkUtilitiesError.GetHostNameFailed(errno)
     }
-    return String.fromCString(&cstring)
+    return String(utf8String: &cstring)
 }
 /// Performs the call `Darwin.sethostname()`.
 ///
@@ -229,7 +229,7 @@ public func gethostname() throws -> String? {
 ///         for the corresponding error.
 public func sethostname(hostname: String) throws {
     let maxlength = Int(sysconf(_SC_HOST_NAME_MAX))
-    let len = hostname.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
+    let len = hostname.lengthOfBytes(using: NSUTF8StringEncoding)
     guard len <= maxlength else {
         throw NetworkUtilitiesError.ParameterError(
       "The length of hostname cannot be greater than sysconf(_SC_HOST_NAME_MAX)"
@@ -245,8 +245,8 @@ public func sethostname(hostname: String) throws {
 
 extension String {
     /// Returns a `String` given a c error `number`.
-    public static func fromCError(number: Int32) -> String {
-        return String.fromCString(strerror(number))!
+    public static func fromCError(_ number: Int32) -> String {
+        return String(utf8String: strerror(number))!
     }
 }
 
@@ -286,8 +286,8 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
         }
         
         var record = HostEntry()
-        record.name = String.fromCString(ent.memory.h_name)
-        switch ent.memory.h_addrtype {
+        record.name = String(utf8String: ent.pointee.h_name)
+        switch ent.pointee.h_addrtype {
         case PF_INET:
             record.type = .INET
         case PF_INET6:
@@ -299,8 +299,8 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
             //)
         }
         var counter = 0
-        while ent.memory.h_aliases[counter] != nil {
-            if let str = String.fromCString(ent.memory.h_aliases[counter]) {
+        while ent.pointee.h_aliases[counter] != nil {
+            if let str = String(utf8String: ent.pointee.h_aliases[counter]) {
                 record.aliases.append(str)
             }
             counter += 1
@@ -309,11 +309,11 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
         counter = 0
         typealias InAddrPtrType = UnsafeMutablePointer<Darwin.in_addr>
         let addr_list = UnsafeMutablePointer<InAddrPtrType>(
-            ent.memory.h_addr_list
+            ent.pointee.h_addr_list
         )
         while addr_list[counter] != nil {
-            var address = addr_list[counter].memory
-            if let str = inet_ntop(&address, type: family) {
+            var address = addr_list[counter].pointee
+            if let str = inet_ntop(address: &address, type: family) {
                 record.addresses.append(str)
             }
             counter += 1
@@ -343,14 +343,14 @@ public func inet_ntop(address: UnsafePointer<in_addr>, type: DomainAddressFamily
         default:
             return nil
         }
-        var cstring: [Int8] = [Int8](count: Int(length), repeatedValue: 0)
+        var cstring: [Int8] = [Int8](repeating: 0, count: Int(length))
         let result = Darwin.inet_ntop(
             type.systemValue,
             address,
             &cstring,
             socklen_t(length)
         )
-        return String.fromCString(result)
+        return String(utf8String: result)
 }
 
 

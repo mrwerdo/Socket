@@ -10,7 +10,7 @@ import Darwin
 
 private let __DARWIN_NFDBITS = Int32(sizeof(Int32)) * __DARWIN_NBBY
 private let __DARWIN_NUMBER_OF_BITS_IN_SET: Int32 = { () -> Int32 in
-    func howmany(x: Int32, _ y: Int32) -> Int32 {
+    func howmany(_ x: Int32, _ y: Int32) -> Int32 {
         return (x % y) == 0 ? (x / y) : (x / (y + 1))
     }
     return howmany(__DARWIN_FD_SETSIZE, __DARWIN_NFDBITS)
@@ -20,7 +20,10 @@ extension fd_set {
     /// Returns the index of the highest bit set.
     private mutating func highestDescriptor() -> Int32 {
         var highestFD: Int32 = 0
-        for index in (__DARWIN_NUMBER_OF_BITS_IN_SET * Int32(sizeof(__int32_t)) - 1).stride(through: 0, by: -1) {
+        let max = (__DARWIN_NUMBER_OF_BITS_IN_SET * Int32(sizeof(__int32_t)) - 1)
+        let min: Int32 = 0
+        
+        for index in stride(from: max, through: min, by: -1) {
             if isset(index) != 0 {
                 highestFD = index
                 break
@@ -30,7 +33,7 @@ extension fd_set {
     }
     
     /// Clears the `bit` index given.
-    private mutating func clear(bit: Int32) {
+    private mutating func clear(_ bit: Int32) {
         let i = Int(bit / __DARWIN_NFDBITS)
         let v = ~Int32(1 << (bit % __DARWIN_NFDBITS))
         
@@ -38,7 +41,7 @@ extension fd_set {
         array[i] &= v
     }
     /// Sets the `bit` index given.
-    private mutating func set(bit: Int32) {
+    private mutating func set(_ bit: Int32) {
         let i = Int(bit / __DARWIN_NFDBITS)
         let v = Int32(1 << (bit % __DARWIN_NFDBITS))
         
@@ -46,7 +49,7 @@ extension fd_set {
         array[i] |= v
     }
     /// Returns non-zero if `bit` is set.
-    private mutating func isset(bit: Int32) -> Int32 {
+    private mutating func isset(_ bit: Int32) -> Int32 {
         let i = Int(bit / __DARWIN_NFDBITS)
         let v = Int32(1 << (bit % __DARWIN_NFDBITS))
         
@@ -59,15 +62,15 @@ extension fd_set {
         bzero(bits, Int(__DARWIN_NUMBER_OF_BITS_IN_SET))
     }
     /// Returns `true` if `socket` is in the set.
-    public mutating func isSet(socket: Socket) -> Bool {
+    public mutating func isSet(_ socket: Socket) -> Bool {
         return isset(socket.fd) != 0
     }
     /// Adds `socket` to the set.
-    public mutating func add(socket: Socket) {
+    public mutating func add(_ socket: Socket) {
         self.set(socket.fd)
     }
     /// Removes `socket` from the set.
-    public mutating func remove(socket: Socket) {
+    public mutating func remove(_ socket: Socket) {
         self.clear(socket.fd)
     }
 }

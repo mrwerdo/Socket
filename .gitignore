@@ -4,3 +4,5 @@
 SocketsDev/
 # Hide our build stuff
 .build/
+# Ignore the xcode project.
+Socket.xcodeproj

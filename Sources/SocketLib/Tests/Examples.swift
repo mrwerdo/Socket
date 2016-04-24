@@ -10,15 +10,15 @@ import Foundation
 
 // Coded examples for the readme file.
 
-@noreturn func errmsg(error: ErrorType) {
-    fatalError("error performing \(__FUNCTION__); reason: \(error)")
+@noreturn func errmsg(_ error: ErrorProtocol) {
+    fatalError("error performing \(#function); reason: \(error)")
 }
 
 func simpleTCPSend() {
     do {
         let data = "Hello, TCP!"
         let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-        try socket.send(data)
+        try socket.send(str: data)
         try socket.close()
     } catch {
         errmsg(error)
@@ -32,9 +32,9 @@ func simpleUDPSend() {
         let socket = try Socket(domain: .INET, type: .Datagram, proto: .UDP)
         for address in try getaddrinfo(host: destinationHost, service: nil, hints: &socket.address.addrinfo) {
             do {
-                let length = data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
-                try address.setPort(500)
-                try socket.sendTo(address, data: data, length: length)
+                let length = data.lengthOfBytes(using:)(using: NSUTF8StringEncoding)
+                try address.setPort(port: 500)
+                try socket.sendTo(address: address, data: data, length: length)
                 break // only send once
             } catch {
                 continue
@@ -53,10 +53,10 @@ func simpleTCPRecv() {
         try socket.connectTo(host: sendingHost, port: 5000)
         
         do {
-            guard let message = try socket.recv(1024) else {
+            guard let message = try socket.recv(maxSize: 1024) else {
                 return // connection closed
             }
-            if let data = String.fromCString(UnsafePointer(message.data)) {
+            if let data = String(utf8String: UnsafePointer(message.data)) {
                 print("New message \(message.length) bytes long: \(data)")
             } else {
                 print("Error decoding message!")
@@ -77,8 +77,8 @@ func simpleUDPRecv() {
         try socket.bindTo(host: recievingHost, port: 5000)
         
         do {
-            let message = try socket.recv(1024)! // UDP is connectionless
-            if let data = String.fromCString(UnsafePointer(message.data)) {
+            let message = try socket.recv(maxSize: 1024)! // UDP is connectionless
+            if let data = String(utf8String: UnsafePointer(message.data)) {
                 print("New message \(message.length) bytes long: \(data)")
             } else {
                 print("Error decoding message!")
@@ -99,18 +99,18 @@ func simpleTCPServer() {
         let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
         try socket.setShouldReuseAddress(true)
         try socket.bindTo(host: recievingHost, port: 5000)
-        try socket.listen(5)
+        try socket.listen(backlog: 5)
         
         mainLoop: while shouldRun {
             let client = try socket.accept()
             
             recvLoop: while true {
                 do {
-                    guard let message = try client.recv(1024) else {
+                    guard let message = try client.recv(maxSize: 1024) else {
                         try client.close()
                         break recvLoop
                     }
-                    if let data = String.fromCString(UnsafePointer(message.data)) {
+                    if let data = String(utf8String: UnsafePointer(message.data)) {
                         switch data {
                         case "STOP":
                             shouldRun = false
@@ -125,13 +125,13 @@ func simpleTCPServer() {
                     continue recvLoop
                 }
             }
-            try client.send("Goodbye!")
+            try client.send(str: "Goodbye!")
             try client.close()
         }
         try socket.close()
         
     } catch let e as SocketError {
-        func emsg(n: Int32) -> String {
+        func emsg(_ n: Int32) -> String {
             return String.fromCError(n)
         }
         switch e {

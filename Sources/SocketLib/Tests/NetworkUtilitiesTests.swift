@@ -18,7 +18,7 @@ func testgetaddrinfo() {
     } catch let error as NetworkUtilitiesError {
         switch error {
         case .GetAddressInfoFailed(let num):
-            print(String.fromCString(gai_strerror(num)))
+            print(String(utf8String: gai_strerror(num)))
         case .ParameterError(let str):
             print(str)
         default:
@@ -33,18 +33,18 @@ func testgetandsethostname() {
         
         let hostname = try gethostname()
         let newhostname = "mrwerdo.local"
-        try sethostname(newhostname)
+        try sethostname(hostname: newhostname)
         let changedhostname = try gethostname()
-        try sethostname(hostname!)
+        try sethostname(hostname: hostname!)
         let finalhostname = try gethostname()
         
         print(hostname, newhostname, changedhostname, finalhostname)
     } catch let e as NetworkUtilitiesError {
         switch e {
         case .GetAddressInfoFailed(let n):
-            print("Probally not enough memory: \(String.fromCString(strerror(n)))")
+            print("Probally not enough memory: \(String(utf8String: strerror(n)))")
         case .SetHostnameFailed(let n):
-            print("Probally not root: \(String.fromCString(strerror(n)))")
+            print("Probally not root: \(String(utf8String: strerror(n)))")
         case .ParameterError(let d):
             print(d)
         default:
@@ -68,9 +68,9 @@ func exampleUsingGetHostNameAndGetAddrInfo() {
         case .ParameterError(let d):
             print(d)
         case .GetHostNameFailed(let n):
-            print("Error retriving the host name: \(String.fromCString(strerror(n)))")
+            print("Error retriving the host name: \(String(utf8String: strerror(n)))")
         case .GetAddressInfoFailed(let n):
-            print("Error retriving the host address: \(String.fromCString(strerror(n)))")
+            print("Error retriving the host address: \(String(utf8String: strerror(n)))")
         default:
             break
         }
@@ -83,14 +83,14 @@ func testTCPConnect() {
     do {
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
         try socket.connectTo(host: "andrews-imac.local", port: 5000)
-        try socket.send(data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding), flags: 0)
+        try socket.send(str: data, flags: 0)
         try socket.close()
     } catch let e as SocketError {
         switch e {
         case .NoAddressesFound(let reason, let errors):
             print(reason, ". Reason(s): ", separator: "", terminator: "")
             errors.forEach {
-                print(String.fromCString(strerror($0))!, separator: ", ", terminator: "")
+                print(String(utf8String: strerror($0))!, separator: ", ", terminator: "")
             }
             print("")
         default:
@@ -108,11 +108,11 @@ func testTCPServer() {
         
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Stream, proto: CommunicationProtocol.TCP)
         try socket.bindTo(host: "localhost", port: 5000)
-        try socket.listen(5)
+        try socket.listen(backlog: 5)
         while !shouldStop {
             let incoming = try socket.accept()
-            if let message = try incoming.recv(1024) {
-                if let str = String.fromCString(UnsafePointer<Int8>(message.data)) {
+            if let message = try incoming.recv(maxSize: 1024) {
+                if let str = String(utf8String: UnsafePointer<Int8>(message.data)) {
                     if str == "stop" {
                         shouldStop = true
                     } else {
@@ -189,12 +189,12 @@ func testTCPLocalSocket() {
     do {
         let socket = try Socket(domain: DomainAddressFamily.Local, type: SocketType.Stream, proto: .Other(0))
         try socket.bindTo(file: "/tmp/mytcpsocket")
-        try socket.listen(5)
+        try socket.listen(backlog: 5)
         while true {
             let incomming = try socket.accept()
             print("Recieving new message...: ", terminator: "")
-            if let message = try incomming.recv(1024) {
-                if let str = String.fromCString(UnsafePointer(message.data)) {
+            if let message = try incomming.recv(maxSize: 1024) {
+                if let str = String(utf8String: UnsafePointer(message.data)) {
                     print("\(str)")
                 } else {
                     print("failed to read data")
@@ -221,8 +221,8 @@ func testUDPSendTo() {
         let data = "Hello, World!"
         let socket = try Socket(domain: DomainAddressFamily.INET, type: SocketType.Datagram, proto: CommunicationProtocol.UDP)
         for address in try getaddrinfo(host: "localhost", service: nil, hints: &socket.address.addrinfo) {
-            try address.setPort(5000)
-            try socket.sendTo(address, data: data, length: data.lengthOfBytesUsingEncoding(NSUTF8StringEncoding))
+            try address.setPort(port: 5000)
+            try socket.sendTo(address: address, data: data, length: data.lengthOfBytes(using: NSUTF8StringEncoding))
         }
     } catch let e as SocketError {
         switch e {
@@ -239,8 +239,8 @@ func testUDPRecv() {
         try socket.bindTo(host: "localhost", port: 5000)
         
         while true {
-            if let message = try socket.recv(1024) {
-                if let str = String.fromCString(UnsafePointer(message.data)) {
+            if let message = try socket.recv(maxSize: 1024) {
+                if let str = String(utf8String: UnsafePointer(message.data)) {
                     print("New message: \(str)")
                 } else {
                     print("Error displaying message")
@@ -269,7 +269,7 @@ func testGetnameInfo() {
         let socket = try Socket(domain: .INET, type: .Stream, proto: .TCP)
         let address = try getaddrinfo(host: "15M216063.local", service: nil, hints: &socket.address.addrinfo)
         try socket.connectTo(address: address.first! , port: 5000)
-        try socket.send("Hello, World!")
+        try socket.send(str: "Hello, World!")
         if let peer = socket.peerAddress {
             print(peer.hostname)
         } else {
@@ -286,7 +286,7 @@ func testGetnameInfo() {
     } catch let e as NetworkUtilitiesError {
         switch e {
         case .GetNameInfoFailed(let n):
-            print(String.fromCString(gai_strerror(n)))
+            print(String(utf8String: gai_strerror(n)))
         default:
             print(e)
         }
@@ -302,11 +302,11 @@ func testMoreTCPServerStuff() {
         if let hostname = socket.address.hostname {
             print("Bound server to \(hostname) on port 5000...")
         }
-        try socket.listen(5)
+        try socket.listen(backlog: 5)
         while true {
             let incomming = try socket.accept()
-            if let message = try incomming.recv(1024) {
-                if let data = String.fromCString(UnsafeMutablePointer(message.data)) {
+            if let message = try incomming.recv(maxSize: 1024) {
+                if let data = String(utf8String: UnsafeMutablePointer(message.data)) {
                     print("Recieved a message from \(incomming.address.hostname ?? "an unknown host"): \(data)")
                 } else {
                     print("Failed to decode data.")
@@ -314,7 +314,7 @@ func testMoreTCPServerStuff() {
             } else {
                 print("Failed to recieve data.")
             }
-            try incomming.send("Hello, your address is: \(incomming.address.hostname ?? "unknown")")
+            try incomming.send(str: "Hello, your address is: \(incomming.address.hostname ?? "unknown")")
             try incomming.close()
         }
     } catch {
@@ -322,58 +322,58 @@ func testMoreTCPServerStuff() {
     }
 }
 
-func testASimpleSelectServer() {
-    do {
-        var shouldRun = true
-        var readSet = fd_set()
-        var clients: [Socket] = []
-        
-        let server = try Socket(domain: .INET, type: .Stream, proto: .TCP)
-        try server.setShouldReuseAddress(true)
-        try server.bindTo(host: "localhost", port: 5000)
-        try server.listen(5)
-        
-        readSet.add(server)
-        print(readSet)
-        print("Running server on localhost, port 5000")
-        while shouldRun {
-            var (_, readReady, _, _) = try select(readSet, write: nil, error: nil, timeout: nil)
-            if readReady.isSet(server) {
-                let newPeer = try server.accept()
-                clients.append(newPeer)
-                readSet.add(newPeer)
-                print("New client connected: \(newPeer.peerAddress?.hostname)")
-            }
-            for client in clients {
-                if readReady.isSet(client) {
-                    if let message = try client.recv(1024) {
-                        if let str = String.fromCString(UnsafePointer(message.data)) {
-                            print("Recieved a new message from \(client.peerAddress?.hostname ?? "unknown"): \(str)")
-                            try client.send("I recieved your message!")
-                            if str == "stop" {
-                                try client.send("Shutting down now!")
-                                shouldRun = false
-                            }
-                        } else {
-                            print("Error decoding data!")
-                            try client.send("Error decoding data!")
-                        }
-                    } else {
-                        readSet.remove(client)
-                        let index = clients.indexOf { client.fd == $0.fd }!
-                        clients.removeAtIndex(index)
-                        print("Client \(client.peerAddress?.hostname ?? "unknown") disconnected")
-                        try client.close()
-                    }
-                }
-            }
-        }
-        for client in clients {
-            try client.close()
-        }
-        try server.close()
-        
-    } catch {
-        print("Error: \(error)")
-    }
-}
+//func testASimpleSelectServer() {
+//    do {
+//        var shouldRun = true
+//        var readSet = fd_set()
+//        var clients: [Socket] = []
+//        
+//        let server = try Socket(domain: .INET, type: .Stream, proto: .TCP)
+//        try server.setShouldReuseAddress(true)
+//        try server.bindTo(host: "localhost", port: 5000)
+//        try server.listen(backlog: 5)
+//        
+//        readSet.add(server)
+//        print(readSet)
+//        print("Running server on localhost, port 5000")
+//        while shouldRun {
+//            var (_, readReady, _, _) = try select(readSet, write: nil, error: nil, timeout: nil)
+//            if readReady.isSet(server) {
+//                let newPeer = try server.accept()
+//                clients.append(newPeer)
+//                readSet.add(newPeer)
+//                print("New client connected: \(newPeer.peerAddress?.hostname)")
+//            }
+//            for client in clients {
+//                if readReady.isSet(client) {
+//                    if let message = try client.recv(1024) {
+//                        if let str = String.fromCString(UnsafePointer(message.data)) {
+//                            print("Recieved a new message from \(client.peerAddress?.hostname ?? "unknown"): \(str)")
+//                            try client.send("I recieved your message!")
+//                            if str == "stop" {
+//                                try client.send("Shutting down now!")
+//                                shouldRun = false
+//                            }
+//                        } else {
+//                            print("Error decoding data!")
+//                            try client.send("Error decoding data!")
+//                        }
+//                    } else {
+//                        readSet.remove(client)
+//                        let index = clients.indexOf { client.fd == $0.fd }!
+//                        clients.removeAtIndex(index)
+//                        print("Client \(client.peerAddress?.hostname ?? "unknown") disconnected")
+//                        try client.close()
+//                    }
+//                }
+//            }
+//        }
+//        for client in clients {
+//            try client.close()
+//        }
+//        try server.close()
+//        
+//    } catch {
+//        print("Error: \(error)")
+//    }
+//}

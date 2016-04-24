@@ -43,7 +43,7 @@ public enum DomainAddressFamily {
     /// Host-internal protocols, formerly UNIX
     case Local
     /// Host-internal protocls, deprecated, use Local
-    @available(OSX, deprecated=10.11, renamed="Local")
+    @available(OSX, deprecated:10.11, renamed:"Local")
     case UNIX
     /// Internet Version 4 Protocol
     case INET
@@ -103,7 +103,7 @@ public enum CommunicationProtocol {
     } 
 }
 
-public enum SocketError : ErrorType {
+public enum SocketError : ErrorProtocol {
     /// Thrown when a call to `Darwin.socket()` fails. The associate value holds
     /// the error number returned.
     case CreationFailed(Int32)
@@ -117,7 +117,7 @@ public enum SocketError : ErrorType {
     /// given information have been exhausted. The associate string holds a
     /// description of the error, and the array holds errors returned from the
     /// system call.
-    @available(OSX, deprecated=10.10, renamed="NoAddressesAvailable")
+    @available(OSX, deprecated:10.10, renamed:"NoAddressesAvailable")
     case NoAddressesFound(String, [Int32])
     /// Thrown by `bind()` or `connect()` when all possible addresses with the
     /// given information has been exhausted. The associate array holds the
@@ -173,17 +173,17 @@ public class Socket {
         [unowned self] in
         
         let size = sizeof(Darwin.sockaddr_storage)
-        let sockStorage = UnsafeMutablePointer<sockaddr_storage>.alloc(size)
+        let sockStorage = UnsafeMutablePointer<sockaddr_storage>(allocatingCapacity: size)
         let sockAddr = UnsafeMutablePointer<Darwin.sockaddr>(sockStorage)
         var length = socklen_t(size)
         
         guard getpeername(self.fd, sockAddr, &length) == 0 else {
-            sockStorage.dealloc(size)
+            sockStorage.deallocateCapacity(size)
             return nil // I would like to throw something here...
         }
         
         let addr = AddrInfo(copy: self.address.addrinfo)
-        addr.sockaddr_storage.dealloc(size)
+        addr.sockaddr_storage.deallocateCapacity(size)
         addr.sockaddr_storage = sockStorage
         
         return addr
@@ -343,28 +343,28 @@ public class Socket {
 }
 // MARK: - Unavailable
 extension Socket {
-    @available(*, unavailable, renamed="bindTo(address:port:)")
+    @available(*, unavailable, renamed:"bindTo(address:port:)")
     public func bind(toAddress address: AddrInfo, port: Int32) throws {
         fatalError("calling unavailable method")
     }
-    @available(*, unavailable, renamed="bindTo(host:port:)")
+    @available(*, unavailable, renamed:"bindTo(host:port:)")
     public func bind(toAddress hostname: String, port: Int32) throws {
         fatalError("calling unavailable method")
     }
-    @available(*, unavailable, renamed="bindTo(file:shouldUnlink:)")
+    @available(*, unavailable, renamed:"bindTo(file:shouldUnlink:)")
     public func bind(toFile file: String, shouldUnlink unlinkFile: Bool = true)
         throws {
         fatalError("calling unavailable method")
     }
-    @available(*, unavailable, renamed="connectTo(host:port:)")
+    @available(*, unavailable, renamed:"connectTo(host:port:)")
     public func connect(to hostname: String, port: Int32) throws {
         fatalError("calling unavailable method")
     }
-    @available(*, unavailable, renamed="connectTo(address:port:)")
+    @available(*, unavailable, renamed:"connectTo(address:port:)")
     public func connect(to address: AddrInfo, port: Int32) throws {
         fatalError("calling unavailable method")
     }
-    @available(*, unavailable, renamed="sendTo(_:data:length:flags:maxSize:")
+    @available(*, unavailable, renamed:"sendTo(_:data:length:flags:maxSize:")
     public func send(to address: AddrInfo, data: UnsafePointer<Void>, length: Int, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
         fatalError("calling unavailable method")
     }
@@ -393,13 +393,13 @@ extension Socket {
     ///
     /// [1]: x-man-page://2/bind
     /// [2]: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
-    public func bindTo(address address: AddrInfo, port: Int32) throws {
+    public func bindTo(address: AddrInfo, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
             )
         }
-        try address.setPort(port)
+        try address.setPort(port: port)
         guard Darwin.bind(fd,
             address.addrinfo.ai_addr,
             address.addrinfo.ai_addrlen
@@ -463,7 +463,7 @@ extension Socket {
         let hosts = try getaddrinfo(host: hostname, service: nil, hints: &hints)
         for host in hosts
         {
-            try host.setPort(port)
+            try host.setPort(port: port)
             try initaliseSocket()
             
             guard Darwin.bind(
@@ -501,20 +501,20 @@ extension Socket {
     /// - Throws:
     ///     - `SocketError.BindFailed`
     ///     - `SocketError.UnlinkFailed`
-    public func bindTo(file file: String, shouldUnlink unlinkFile: Bool = true)
+    public func bindTo(file: String, shouldUnlink unlinkFile: Bool = true)
         throws {
-            let length = file.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
+            let length = file.lengthOfBytes(using: NSUTF8StringEncoding)
             var addr_un = sockaddr_un()
             addr_un.sun_family = UInt8(address.addrinfo.ai_family)
-            addr_un.setPath(file, length: length)
+            addr_un.setPath(path: file, length: length)
             
             UnsafeMutablePointer<Darwin.sockaddr_un>(
                 address.addrinfo.ai_addr
-            ).memory = addr_un
+            ).pointee = addr_un
             address.addrinfo.ai_addrlen = UInt32(sizeof(sockaddr_un))
             
             if unlinkFile {
-                try unlink(file, errorOnFNF: false)
+                try unlink(path: file, errorOnFNF: false)
             }
             
             guard Darwin.bind(
@@ -525,6 +525,9 @@ extension Socket {
             else {
                 throw SocketError.BindFailed(errno)
             }
+            
+            NSFileManager
+            
     }
     
     /// Unlinks the file at the given url.
@@ -594,7 +597,7 @@ extension Socket {
         let hosts = try getaddrinfo(host: hostname, service: nil, hints: &hints)
         for host in hosts
         {
-            try host.setPort(port)
+            try host.setPort(port: port)
             try initaliseSocket()
             
             guard Darwin.connect(
@@ -626,15 +629,15 @@ extension Socket {
     /// - Throws:
     ///     - `SocketError.ParameterError`
     ///     - `SocketError.ConnectFailed`
-    public func connectTo(address address: AddrInfo, port: Int32) throws {
+    public func connectTo(address: AddrInfo, port: Int32) throws {
         guard port >= 0 else {
             throw SocketError.ParameterError(
                 "Invalid port number - port cannot be negative"
             )
         }
-        try address.setPort(port)
+        try address.setPort(port: port)
         address.addrinfo.ai_addrlen = UInt32(
-            sizeofValue(address.addrinfo.ai_addr.memory)
+            sizeofValue(address.addrinfo.ai_addr.pointee)
         )
         guard Darwin.connect(
             fd,
@@ -654,15 +657,17 @@ extension Socket {
     /// - Note: The socket's family must be of type `DomainAddressFamily.Local`.
     /// - parameters:
     ///     - path:         The file path to connect to.
-    public func connectTo(file file: String) throws {
-        let length = file.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
+    public func connectTo(file: String) throws {
+        let length = file.lengthOfBytes(using: NSUTF8StringEncoding)
         var addr_un = sockaddr_un()
         addr_un.sun_family = sa_family_t(address.addrinfo.ai_family)
-        addr_un.setPath(file, length: length)
+        addr_un.setPath(path: file, length: length)
         
-        UnsafeMutablePointer<Darwin.sockaddr_un>(
-            address.addrinfo.ai_addr
-        ).memory = addr_un
+//        UnsafeMutablePointer<Darwin.sockaddr_un>(
+//            address.addrinfo.ai_addr
+//        ).memory = addr_un
+        _ = UnsafeMutablePointer<Darwin.sockaddr_un>(address.addrinfo.ai_addr)
+        
         address.addrinfo.ai_addrlen = socklen_t(sizeof(sockaddr_un))
         
         guard Darwin.connect(
@@ -717,7 +722,7 @@ extension Socket {
                 guard success != -1 else {
                     throw SocketError.SendToFailed(errno)
                 }
-                data = data.advancedBy(success)
+                data = data.advanced(by: success)
                 bytesSent += success
                 bytesLeft -= success
             }
@@ -760,12 +765,12 @@ extension Socket {
                     len,
                     flags,
                     address.addrinfo.ai_addr,
-                    UInt32(address.addrinfo.ai_addr.memory.sa_len)
+                    UInt32(address.addrinfo.ai_addr.pointee.sa_len)
                 )
                 guard success != -1 else {
                     throw SocketError.SendToFailed(errno)
                 }
-                data = data.advancedBy(success)
+                data = data.advanced(by: success)
                 bytesSent += success
                 bytesleft -= success
             }
@@ -796,7 +801,7 @@ extension Socket {
 	///			understanding/willpower to implement it correctly. It should 
 	///			attempt to break each packet into a size of 1024, and send 
 	///			individually.
-    public func send(inout msg: msghdr, flags: Int32 = 0, maxSize: Int = 1024)
+    public func send( msg: inout msghdr, flags: Int32 = 0, maxSize: Int = 1024)
         throws -> Int {
         
             // FIXME: Send message must be in a while loop
@@ -830,8 +835,8 @@ extension Socket {
 	/// - Throws:
 	///		- `SocketError.SendToFailed`
     public func send(str: String, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
-        let length = str.lengthOfBytesUsingEncoding(NSUTF8StringEncoding)
-        return try self.send(str, length: length, flags: flags, maxSize: maxSize)
+        let length = str.lengthOfBytes(using: NSUTF8StringEncoding)
+        return try self.send(data: str, length: length, flags: flags, maxSize: maxSize)
     }
 
 	/// Sends `data` to the peer.
@@ -857,7 +862,7 @@ extension Socket {
 	///		- `SocketError.SendToFailed`
     public func send(data: NSData, flags: Int32 = 0, maxSize: Int = 1024) throws -> Int {
         let len = data.length
-        return try self.send(data.bytes, length: len, flags: flags, maxSize: maxSize)
+        return try self.send(data: data.bytes, length: len, flags: flags, maxSize: maxSize)
     }
 }
 extension Socket {
@@ -882,13 +887,13 @@ extension Socket {
 		/// Copies `data` and initalizes the object with `length` and `sender`.
         init(copy data: UnsafeMutablePointer<Void>, length: Int,
             sender: sockaddr?) {
-                self.data = UnsafeMutablePointer<Void>.alloc(length)
+                self.data = UnsafeMutablePointer<Void>.init(allocatingCapacity: length)
                 self.length = length
                 self.sender = sender
                 memcpy(self.data, data, length)
         }
         deinit {
-            data.dealloc(length)
+            data.deallocateCapacity(length)
         }
     }
 	/// Returns any data which has been recieved from the peer(s).
@@ -914,13 +919,13 @@ extension Socket {
 	///		- `SocketError.RecvTryAgain`
 	///		- `SocketError.RecvFromFailed`
     public func recv(maxSize: Int, flags: Int32 = 0) throws -> Message? {
-        var buffer = UnsafeMutablePointer<Int8>.alloc(maxSize + 1)
+        var buffer = UnsafeMutablePointer<Int8>(allocatingCapacity: maxSize + 1)
         var addrLen = socklen_t(sizeof(sockaddr))
-        let addr = UnsafeMutablePointer<sockaddr>.alloc(sizeof(sockaddr))
+        let addr = UnsafeMutablePointer<sockaddr>(allocatingCapacity: sizeof(sockaddr))
         
         defer {
-            buffer.dealloc(maxSize + 1)
-            addr.dealloc(sizeof(sockaddr))
+            buffer.deallocateCapacity(maxSize + 1)
+            addr.deallocateCapacity(sizeof(sockaddr))
         }
         
         let success = Darwin.recvfrom(
@@ -944,7 +949,7 @@ extension Socket {
             return nil // Connection is closed if TCP and success == 0.
         }
         buffer[success] = 0
-        return Message(copy: buffer, length: success + 1, sender: addr.memory)
+        return Message(copy: buffer, length: success + 1, sender: addr.pointee)
 	}
     // TODO: Add a recv(msg: etc...) function.
 }
@@ -961,8 +966,8 @@ extension Socket {
 	/// - Throws:
 	///		- `SocketError.AcceptFailed`
     public func accept() throws -> Socket {
-        let sockStorage = UnsafeMutablePointer<sockaddr_storage>.alloc(
-            sizeof(sockaddr_storage)
+        let sockStorage = UnsafeMutablePointer<sockaddr_storage>(
+            allocatingCapacity: sizeof(sockaddr_storage)
         )
         let sockAddr = UnsafeMutablePointer<Darwin.sockaddr>(sockStorage)
         var length = socklen_t(sizeof(sockaddr_storage))
@@ -974,7 +979,7 @@ extension Socket {
         
         let socket = Socket(copy: AddrInfo(copy: self.address.addrinfo),
                             fd: success)
-        socket.address.sockaddr_storage.dealloc(sizeof(sockaddr_storage))
+        socket.address.sockaddr_storage.deallocateCapacity(sizeof(sockaddr_storage))
         socket.address.sockaddr_storage = sockStorage // Substitute sockStorage
         
         return socket
@@ -1017,7 +1022,7 @@ extension Socket {
 	///						disallow reuse of the address.
 	/// - Throws:
 	///		- `SocketError.SetSocketOptionFailed`
-    public func setShouldReuseAddress(value: Bool) throws {
+    public func setShouldReuseAddress(_ value: Bool) throws {
         var number: CInt = value ? 1 : 0
         shouldReuseAddress = value
         guard Darwin.setsockopt(
@@ -1065,7 +1070,7 @@ extension Socket {
     ///     - value:        A buffer which will be filled with the result.
     ///     - valueLen:     The length of the buffer.
     public func getSocketOption(layer: Int32 = SOL_SOCKET, option: Int32,
-        value: UnsafeMutablePointer<Void>, inout valueLen: socklen_t) throws {
+        value: UnsafeMutablePointer<Void>, valueLen: inout socklen_t) throws {
             guard Darwin.getsockopt(
                 fd,
                 layer,
@@ -1082,11 +1087,11 @@ extension sockaddr_un {
     /// Copies `path` into `sun_path`. Values located over the 104th index are
     /// not copied.
     mutating func setPath(path: UnsafePointer<Int8>, length: Int) {
-        var array = [Int8](count: 104, repeatedValue: 0)
+        var array = [Int8](repeating: 0, count: 104)
         for i in 0..<length {
             array[i] = path[i]
         }
-        setPath(array)
+        setPath(path: array)
     }
     
     /// Copies a `path` into `sun_path`
@@ -1204,7 +1209,8 @@ extension sockaddr_un {
     }
     // Retrieves `sun_path` into an arary.
     func getPath() -> [Int8] {
-        var path = [Int8](count: 104, repeatedValue: 0)
+//        var path = [Int8](count: 104, repeatedValue: 0)
+        var path = [Int8](repeating: 0, count: 104)
         
         path[0] = sun_path.0
         path[1] = sun_path.1
