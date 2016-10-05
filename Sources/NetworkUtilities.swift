@@ -1,42 +1,60 @@
 //
-//	NetworkUtilities.swift
-//	Socket
+//  NetworkUtilities.swift
+//  QuickShare
 //
-//	Created By Andrew Thompson on 10/12/2015.
-//	Copyright (c) 2015 mrwerdo. All rights reserved.
+//  Copyright (c) 2016 Andrew Thompson
+//
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in
+//  all copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+//  THE SOFTWARE.
 //
 
 import Darwin
 import Foundation
+import QSFcntl
 
-public enum NetworkUtilitiesError : ErrorProtocol {
+public enum NetworkUtilitiesError : Error {
     /// Thrown when an error occured within the Darwin module.
 
     /// Thrown by `gethostname()` when the system call failed. The associate
     /// value returned is from `errno`, use `strerror()` to obtain a 
     /// description.
-    case GetHostNameFailed(Int32)
+    case getHostNameFailed(Int32)
     /// Thrown by `sethostname()` when the system call failed. The associate
     /// value returned is from `errno`, use `strerror()` to obtain a
     /// description.
-    case SetHostnameFailed(Int32)
+    case setHostnameFailed(Int32)
     /// Thrown by `getaddrinfo(hostname:servname:hints:)`. The associate
     /// value is an error number returned from the system call. Use 
     /// `gai_strerror()` to access a description.
     ///
     /// **See Also**: x-man-page://getaddrinfo
-    case GetAddressInfoFailed(Int32)
+    case getAddressInfoFailed(Int32)
     
-    @available(*, unavailable, renamed:"GetAddressInfoFailed")
-    case GetAddressFailed(Int32)
+    @available(*, unavailable, renamed: "GetAddressInfoFailed")
+    case getAddressFailed(Int32)
     /// Thrown by `getnameinfo(
-    case GetNameInfoFailed(Int32)
+    case getNameInfoFailed(Int32)
 	/// Thrown by `gethostbyname(_:family:)`. The associate value contains
 	/// an error number. Use `herror()` or `hstrerror()` to print or obtain
 	/// a string respectively.
-	case GetHostByNameFailed(Int32)
+	case getHostByNameFailed(Int32)
     /// Occurs when an invalid parameter is given.
-    case ParameterError(String)
+    case parameterError(String)
 }
 
 /// Returns the address of `obj`.
@@ -46,13 +64,13 @@ public enum NetworkUtilitiesError : ErrorProtocol {
 /// that the object exsists throughout the whole lifetime this pointer will 
 /// be used, which is typically done by ensuring the object lives within the
 /// same, or higher scope as the pointer.
-internal func unsafeAddressOfCObj<T: Any>(_ obj: UnsafeMutablePointer<T>) ->
+public func unsafeAddressOfCObj<T: Any>(_ obj: UnsafeMutablePointer<T>) ->
     UnsafeMutablePointer<T> {
     return obj
 }
 
 /// Converts the bytes of `value` from network order to host order.
-public func ntohs(value: CUnsignedShort) -> CUnsignedShort {
+public func ntohs(_ value: CUnsignedShort) -> CUnsignedShort {
     if value.byteSwapped == value.bigEndian && value == value.littleEndian {
         return value.littleEndian
     } else {
@@ -60,7 +78,7 @@ public func ntohs(value: CUnsignedShort) -> CUnsignedShort {
     }
 }
 /// Converts the bytes of `value` from host order to network order.
-public func htons(value: CUnsignedShort) -> CUnsignedShort {
+public func htons(_ value: CUnsignedShort) -> CUnsignedShort {
     // Network byte order is always `bigEndain`.
     return value.bigEndian
 }
@@ -68,11 +86,11 @@ public func htons(value: CUnsignedShort) -> CUnsignedShort {
 extension String {
     /// Returns an underlying c buffer.
     /// - Warning: Deallocate the pointer when done to aviod memory leaks.
-public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
+    private var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
         return self.withCString { (ptr: UnsafePointer<Int8>) ->
             (UnsafeMutablePointer<Int8>, Int) in
             let len = self.utf8.count
-            let buffer = UnsafeMutablePointer<Int8>(allocatingCapacity: len+1)
+            let buffer = UnsafeMutablePointer<Int8>.allocate(capacity: len + 1)
             for i in 0..<len {
                 buffer[i] = ptr[i]
             }
@@ -117,83 +135,77 @@ public var getCString: (ptr: UnsafeMutablePointer<Int8>, len: Int) {
 /// - Throws:
 ///     - `NetworkUtilities.ParmeterError`
 ///     - `NetworkUtilities.GetAddressInfoFailed`
-public func getaddrinfo(host hostname: String?, service serviceName: String?,
-    hints: UnsafePointer<addrinfo>) throws -> [AddrInfo] {
+public func getaddrinfo(host hostname: UnsafePointer<CChar>?, service serviceName: UnsafePointer<CChar>?,
+                          hints: addrinfo) throws -> [AddressInfo] {
     
-        guard !(hostname == nil && serviceName == nil) else {
-            throw NetworkUtilitiesError.ParameterError(
-                "Host name and server name cannot be nil at the same time!"
-            )
-        }
-        
-        var res = addrinfo()
-        var res_ptr: UnsafeMutablePointer<addrinfo> = unsafeAddressOfCObj(&res)
-        let hostname_val: (ptr: UnsafeMutablePointer, len: Int) =
-        hostname?.getCString ?? (nil, 0)
-        let servname_val: (ptr: UnsafeMutablePointer, len: Int) =
-        serviceName?.getCString ?? (nil, 0)
-        
-        defer {
-            if hostname_val.len > 0 {
-                hostname_val.ptr.deallocateCapacity(hostname_val.len)
-            }
-            if servname_val.len > 0 {
-                hostname_val.ptr.deallocateCapacity(hostname_val.len)
-            }
-        }
-        
-        let error = Darwin.getaddrinfo(
-            hostname_val.ptr,
-            servname_val.ptr,
-            hints, &res_ptr
+    guard !(hostname == nil && serviceName == nil) else {
+        throw NetworkUtilitiesError.parameterError(
+            "Host name and server name cannot be nil at the same time!"
         )
-        guard error == 0 else {
-            throw NetworkUtilitiesError.GetAddressInfoFailed(error)
-        }
-        
-        var addresses: [AddrInfo] = []
-        var ptr = res_ptr
-        while ptr != nil {
-            addresses.append(AddrInfo(copy: ptr.pointee))
-            ptr = ptr.pointee.ai_next
-        }
-        
-        freeaddrinfo(res_ptr)
-        return addresses
+    }
+    var hints = hints
+    let ptr = UnsafeMutablePointer<UnsafeMutablePointer<addrinfo>?>.allocate(capacity: 1)
+    defer {
+        ptr.deallocate(capacity: 1)
+    }
+    let error = Darwin.getaddrinfo(hostname, serviceName, &hints, ptr)
+    guard error == 0 else {
+        throw NetworkUtilitiesError.getAddressInfoFailed(error)
+    }
+    
+    if let first = ptr.pointee {
+        let k = sequence(state: first, next: { (state: inout UnsafeMutablePointer<addrinfo>?) -> AddressInfo? in
+            if let a = state?.pointee {
+                state = state?.pointee.ai_next
+                return AddressInfo(a)
+            }
+            return nil
+        })
+        return Array(k)
+    }
+    
+    return []
 }
 
-public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws
+public func getnameinfo(_ info: AddressInfo, flags: Int32 = 0) throws
     -> (hostname: String?, servicename: String?) {
-        var hostnameBuff = UnsafeMutablePointer<Int8>(allocatingCapacity: Int(NI_MAXHOST))
-        var servicenameBuff = UnsafeMutablePointer<Int8>(allocatingCapacity: Int(NI_MAXSERV))
+        var hostnameBuff = UnsafeMutablePointer<Int8>.allocate(capacity: Int(NI_MAXHOST))
+        var servicenameBuff = UnsafeMutablePointer<Int8>.allocate(capacity: Int(NI_MAXSERV))
         
         memset(hostnameBuff, 0, Int(NI_MAXHOST))
         memset(servicenameBuff, 0, Int(NI_MAXSERV))
         
         defer {
-            hostnameBuff.deallocateCapacity(Int(NI_MAXHOST))
-            servicenameBuff.deallocateCapacity(Int(NI_MAXSERV))
+            hostnameBuff.deallocate(capacity: Int(NI_MAXHOST))
+            servicenameBuff.deallocate(capacity: Int(NI_MAXSERV))
+        }
+        var info = info
+        let success = withUnsafePointer(to: &info.address.contents) { (ptr: sockaddr_storage_ptr) -> CInt in
+            return ptr.withMemoryRebound(to: sockaddr.self, capacity: MemoryLayout<sockaddr>.size, { (saddr: UnsafeMutablePointer<sockaddr>) -> Int32 in
+                return Darwin.getnameinfo(
+                    saddr,
+                    socklen_t(info.address.length),
+                    hostnameBuff,
+                    UInt32(NI_MAXHOST) * UInt32(MemoryLayout<Int8>.size),
+                    servicenameBuff,
+                    UInt32(NI_MAXSERV) * UInt32(MemoryLayout<Int8>.size),
+                    flags
+                )
+            })
+            
         }
         
-        let success = Darwin.getnameinfo(
-            address.sockaddr,
-            UInt32(address.sockaddr.pointee.sa_len),
-            hostnameBuff,
-            UInt32(NI_MAXHOST) * UInt32(sizeof(Int8)),
-            servicenameBuff,
-            UInt32(NI_MAXSERV) * UInt32(sizeof(Int8)),
-            flags
-        )
         
         guard success == 0 else {
-            throw NetworkUtilitiesError.GetNameInfoFailed(success)
+            throw NetworkUtilitiesError.getNameInfoFailed(success)
         }
         
         return (
-            String(utf8String: hostnameBuff),
-            String(utf8String: servicenameBuff)
+            String(cString: hostnameBuff),
+            String(cString: servicenameBuff)
         )
 }
+
 
 /// Performs the call `Darwin.gethostname()`.
 ///
@@ -206,15 +218,15 @@ public func getnameinfo(address: AddrInfo, flags: Int32 = 0) throws
 ///         the meaning of the error codes.
 public func gethostname() throws -> String? {
     let maxlength = Int(sysconf(_SC_HOST_NAME_MAX))
-    var cstring: [Int8] = [Int8](repeating: 0, count: 0)
+    var cstring = [Int8](repeating: 0, count: maxlength)
     let result = Darwin.gethostname(
         &cstring,
         maxlength
     )
     guard result == 0 else {
-        throw NetworkUtilitiesError.GetHostNameFailed(errno)
+        throw NetworkUtilitiesError.getHostNameFailed(errno)
     }
-    return String(utf8String: &cstring)
+    return String(cString: &cstring)
 }
 /// Performs the call `Darwin.sethostname()`.
 ///
@@ -227,26 +239,27 @@ public func gethostname() throws -> String? {
 ///     - `NetworkUtilitiesError.LibraryError` when `Darwin.sethostname()`
 ///         fails. `errno` is returned as an associate value, see the man pages
 ///         for the corresponding error.
-public func sethostname(hostname: String) throws {
+public func sethostname(_ hostname: String) throws {
     let maxlength = Int(sysconf(_SC_HOST_NAME_MAX))
-    let len = hostname.lengthOfBytes(using: NSUTF8StringEncoding)
+    let len = hostname.lengthOfBytes(using: String.Encoding.utf8)
     guard len <= maxlength else {
-        throw NetworkUtilitiesError.ParameterError(
+        throw NetworkUtilitiesError.parameterError(
       "The length of hostname cannot be greater than sysconf(_SC_HOST_NAME_MAX)"
         )
     }
     try hostname.withCString { (cstring: UnsafePointer<Int8>) -> Void in
         let result = Darwin.sethostname(cstring, Int32(len))
         guard result == 0 else {
-            throw NetworkUtilitiesError.SetHostnameFailed(errno)
+            throw NetworkUtilitiesError.setHostnameFailed(errno)
         }
     }
 }
 
 extension String {
     /// Returns a `String` given a c error `number`.
+    @available(*, deprecated: 10.10)
     public static func fromCError(_ number: Int32) -> String {
-        return String(utf8String: strerror(number))!
+        return String(cString: strerror(number))
     }
 }
 
@@ -273,25 +286,25 @@ public struct HostEntry {
 ///							about the specified host.
 /// - Throws:
 ///		- `NetworkUtilitiesError.GetHostByNameFailed`
-public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
+public func gethostbyname(_ hostname: String, family: DomainAddressFamily) throws
     -> HostEntry {
         switch family {
-        case .INET, .INET6: break
+        case .inet, .inet6: break
         default:
-			NetworkUtilitiesError.ParameterError("Only IPv4 and IPv6 addresses are supported")
+			throw NetworkUtilitiesError.parameterError("Only IPv4 and IPv6 addresses are supported")
         }
         let ent = Darwin.gethostbyname2(hostname, family.systemValue)
         guard ent != nil else {
-			throw NetworkUtilitiesError.GetHostByNameFailed(h_errno)
+			throw NetworkUtilitiesError.getHostByNameFailed(h_errno)
         }
         
         var record = HostEntry()
-        record.name = String(utf8String: ent.pointee.h_name)
-        switch ent.pointee.h_addrtype {
+        record.name = String(cString: (ent?.pointee.h_name)!)
+        switch ent?.pointee.h_addrtype ?? 0 {
         case PF_INET:
-            record.type = .INET
+            record.type = .inet
         case PF_INET6:
-            record.type = .INET6
+            record.type = .inet6
         default:
             break
             //preconditionFailure(
@@ -299,8 +312,8 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
             //)
         }
         var counter = 0
-        while ent.pointee.h_aliases[counter] != nil {
-            if let str = String(utf8String: ent.pointee.h_aliases[counter]) {
+        while ent?.pointee.h_aliases[counter] != nil {
+            if let str = String(validatingUTF8: (ent?.pointee.h_aliases[counter]!)!) {
                 record.aliases.append(str)
             }
             counter += 1
@@ -308,15 +321,15 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
         
         counter = 0
         typealias InAddrPtrType = UnsafeMutablePointer<Darwin.in_addr>
-        let addr_list = UnsafeMutablePointer<InAddrPtrType>(
-            ent.pointee.h_addr_list
-        )
-        while addr_list[counter] != nil {
-            var address = addr_list[counter].pointee
-            if let str = inet_ntop(address: &address, type: family) {
-                record.addresses.append(str)
+        
+        ent?.pointee.h_addr_list.withMemoryRebound(to: Optional<UnsafeMutablePointer<Darwin.in_addr>>.self, capacity: 10) { (addr_list) in
+            while addr_list[counter] != nil {
+                var address = addr_list[counter]!.pointee
+                if let str = inet_ntop(&address, type: family) {
+                    record.addresses.append(str)
+                }
+                counter += 1
             }
-            counter += 1
         }
         
         return record
@@ -332,26 +345,43 @@ public func gethostbyname(hostname: String, family: DomainAddressFamily) throws
 /// - returns:
 ///                 A string representation of `address`, or nil if it could 
 ///                 not be converted.
-public func inet_ntop(address: UnsafePointer<in_addr>, type: DomainAddressFamily)
+public func inet_ntop(_ address: UnsafePointer<in_addr>, type: DomainAddressFamily)
     -> String? {
         var length: Int32
         switch type {
-        case .INET:
+        case .inet:
             length = INET_ADDRSTRLEN
-        case .INET6:
+        case .inet6:
             length = INET6_ADDRSTRLEN
         default:
             return nil
         }
-        var cstring: [Int8] = [Int8](repeating: 0, count: Int(length))
+        var cstring = [Int8](repeating: 0, count: Int(length))
         let result = Darwin.inet_ntop(
             type.systemValue,
             address,
             &cstring,
             socklen_t(length)
         )
-        return String(utf8String: result)
+        guard result != nil else {
+            return nil
+        }
+        return String(cString: &cstring)
 }
 
+public func getifaddrs() -> [InterfaceAddress]? {
+    if let linkedlist = QSFcntl.qs_getifaddrs() {
+        var interface: UnsafeMutablePointer<ifaddrs>? = linkedlist
+        var interfaces = [InterfaceAddress]()
+        while interface != nil {
+            interfaces.append(InterfaceAddress(interface!.pointee))
+            interface = interface!.pointee.ifa_next
+        }
+        freeifaddrs(linkedlist)
+        return interfaces
+    } else {
+        return nil
+    }
+}
 
 // end of file
