@@ -1,5 +1,5 @@
 //
-//  module.modulemap
+//  qsfcntl.h
 //  QuickShare
 //
 //  Copyright (c) 2016 Andrew Thompson
@@ -23,8 +23,5 @@
 //  THE SOFTWARE.
 //
 
-module Support {
-    header "Support.h"
-    header "Extra.h"
-    export *
-}
+#include <ifaddrs.h>
+#import <CommonCrypto/CommonCrypto.h>

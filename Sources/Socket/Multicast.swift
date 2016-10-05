@@ -24,7 +24,7 @@
 //
 
 import Darwin
-import QSFcntl
+import Support
 
 extension Socket {
     public func setLoopBack(_ value: Bool) throws {

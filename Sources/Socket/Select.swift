@@ -24,7 +24,7 @@
 //
 
 import Darwin
-import QSFcntl
+import Support
 
 //private let __DARWIN_NFDBITS = Int32(sizeof(Int32)) * __DARWIN_NBBY
 //private let __DARWIN_NUMBER_OF_BITS_IN_SET: Int32 = { () -> Int32 in

@@ -25,7 +25,7 @@
 
 import Darwin
 import Foundation
-import QSFcntl
+import Support
 
 public enum NetworkUtilitiesError : Error {
     /// Thrown when an error occured within the Darwin module.
@@ -370,7 +370,7 @@ public func inet_ntop(_ address: UnsafePointer<in_addr>, type: DomainAddressFami
 }
 
 public func getifaddrs() -> [InterfaceAddress]? {
-    if let linkedlist = QSFcntl.qs_getifaddrs() {
+    if let linkedlist = qs_getifaddrs() {
         var interface: UnsafeMutablePointer<ifaddrs>? = linkedlist
         var interfaces = [InterfaceAddress]()
         while interface != nil {

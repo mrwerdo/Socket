@@ -27,8 +27,6 @@
 #include <sys/unistd.h>
 #include <sys/fcntl.h>
 #include <sys/select.h>
-#include <ifaddrs.h>
-#import <CommonCrypto/CommonCrypto.h>
 
 int qsfcntl(int s, int cmd, long arg);
 

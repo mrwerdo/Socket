@@ -1,4 +1,3 @@
-
 //
 //  InternetAddress.swift
 //  LibQuickShare
@@ -25,7 +24,7 @@
 //
 
 import Darwin
-import QSFcntl
+import Support
 
 public protocol SocketAddress {
     var length: __uint8_t { get }
@@ -101,7 +100,7 @@ public struct InterfaceAddress {
     public var destinationAddress: sockaddr_storage?
     public var data: if_data?
     
-    public init(_ ifaddr: ifaddrs) {
+    public init(_ ifaddr: Support.ifaddrs) {
         name = String(utf8String: ifaddr.ifa_name)!
         flags = ifaddr.ifa_flags
         
