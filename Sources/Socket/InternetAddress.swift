@@ -48,10 +48,6 @@ public struct IPv4Address : InternetAddress {
         self.port = port
         self.ipAddress = address
     }
-    public init(address: String, port: in_port_t) {
-        let number = inet_addr(address)
-        self.init(address: number, port: port)
-    }
 }
 
 public struct IPv6Address : InternetAddress {
@@ -154,7 +150,8 @@ extension SocketAddress {
     /// on the resulting pointer.
     mutating func execute<T, Result>(castingTo type: T.Type, size: Int? = nil, code block: ((UnsafeMutablePointer<T>) throws -> Result)) rethrows -> Result {
         return try withUnsafeMutablePointer(to: &contents) { contentsPtr in
-            let size = (size == nil) ? MemoryLayout<T>.size : size!
+            let other = (size == nil) ? MemoryLayout<T>.size : size!
+            let size = max(other, MemoryLayout<Result>.size)
             return try contentsPtr.withMemoryRebound(to: type, capacity: size) { ptr in
                 return try block(ptr)
             }

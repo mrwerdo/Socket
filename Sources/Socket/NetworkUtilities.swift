@@ -100,6 +100,50 @@ extension String {
     }
 }
 
+public struct AddressHints {
+    var type: SocketType
+    var communicationProtocol: CommunicationProtocol
+    var family: DomainAddressFamily
+    var flags: Int32
+}
+
+private func convert(_ results: [AddressInfo], andAssign port: in_port_t) -> [AddressInfo] {
+    let k: [AddressInfo] = results.flatMap { addrInfo in
+        var addrInfo = addrInfo
+        if var s = addrInfo.address as? InternetAddress {
+            s.port = port
+            addrInfo.address = s
+            return addrInfo
+        }
+        return nil
+    }
+    return k
+}
+
+public func find(host name: String, on port: in_port_t, with hints: AddressHints? = nil) throws -> [AddressInfo] {
+    var hts = Darwin.addrinfo()
+    if let addressInfo = hints {
+        hts.ai_socktype   = addressInfo.type.systemValue
+        hts.ai_protocol   = addressInfo.communicationProtocol.systemValue
+        hts.ai_family     = addressInfo.family.systemValue
+        hts.ai_flags      = addressInfo.flags
+    }
+    let results = try getaddrinfo(host: name, service: nil, hints: hts)
+    return convert(results, andAssign: port)
+}
+
+public func find(service: String, on port: in_port_t, with hints: AddressHints? = nil) throws -> [AddressInfo] {
+    var hts = Darwin.addrinfo()
+    if let addressInfo = hints {
+        hts.ai_socktype   = addressInfo.type.systemValue
+        hts.ai_protocol   = addressInfo.communicationProtocol.systemValue
+        hts.ai_family     = addressInfo.family.systemValue
+        hts.ai_flags      = addressInfo.flags
+    }
+    let results = try getaddrinfo(host: nil, service: service, hints: hts)
+    return convert(results, andAssign: port)
+}
+
 /// Obtains a list of IP addresses and port number, given the requirements
 /// `hostname`, `serviceName` and `hints`.
 ///

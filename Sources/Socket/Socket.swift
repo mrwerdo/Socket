@@ -263,6 +263,12 @@ public class Socket {
         }
     }
     
+//    public convenience init(tcpIPv4 address: String, port: in_port_t) throws {
+////        let sockaddress = IPv4Address(address: address, port: port)
+//        let info = AddressInfo.init(family: .inet, type: .stream, protocol: .tcp, address: sockaddress)
+//        try self.init(info: info)
+//    }
+    
     /// Copys `address` and initalises the socket from the `fd` given.
     /// - parameter address: The socket's address.
     /// - parameter fd:      A valid socket file descriptor.
@@ -271,6 +277,7 @@ public class Socket {
         self.closed = true
         self.fd = fd
     }
+    
     /// Re-initalises the socket to a 'new' state, ready for a call to bind
     /// or connect.
     ///
@@ -294,6 +301,7 @@ public class Socket {
         closed = false
         try setShouldReuseAddress(shouldReuseAddress)
     }
+    
     public enum ShutdownMethod {
         case preventRead
         case preventWrite
@@ -309,6 +317,7 @@ public class Socket {
             }
         }
     }
+    
     /// Shuts down the socket, signaling that either all reading has finished,
     /// all writing has finished, or both reading and writing have finished.
     /// A socket is not allowed to write if it has shutdown writing, similarly,
@@ -333,6 +342,7 @@ public class Socket {
             throw SocketError.systemCallError(errno, .shutdown)
         }
     }
+    
     /// Closes the socket.
     ///
     ///
@@ -390,143 +400,44 @@ extension Socket {
     ///
     /// [1]: x-man-page://2/bind
     /// [2]: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
-    public func bindTo(_ address: AddressInfo, port: UInt16) throws {
-        guard port >= 0 else {
-            throw SocketError.parameter("invalid port number", .bind)
+    public func bind(shouldUnlinkFile: Bool = false) throws {
+        switch addressInfo.address {
+        case is InternetAddress:
+            try bindTo(internet: &addressInfo.address)
+        case is LocalAddress:
+            try bindTo(local: &addressInfo.address, shouldUnlink: shouldUnlinkFile)
+        default:
+            fatalError("This class does not know how your bind the address")
         }
-        guard var netaddress = address.address as? InternetAddress else {
-            throw SocketError.parameter("invalid address", .bind)
-        }
-        
-        netaddress.port = port
-        try netaddress.execute(castingTo: sockaddr.self) { (sa: UnsafeMutablePointer<sockaddr>) in
+    }
+    
+    private func bindTo(internet address: inout SocketAddress) throws {
+        try address.execute(castingTo: sockaddr.self) { (sa: UnsafeMutablePointer<sockaddr>) in
             guard Darwin.bind(fd,
                               sa,
-                              socklen_t(netaddress.length)
+                              socklen_t(address.length)
                 ) == 0 else {
                     throw SocketError.systemCallError(errno, .bind)
             }
         }
-        self.addressInfo = address
     }
     
-    /// Binds the socket to the given hostname and port, performing host name
-    /// resolution.
-    ///
-    /// A successful call to bind will result in the socket being assigend an 
-    /// address. This allows for a connection to be established and for
-    /// communication to commence.
-    ///
-    /// This function attepts to resolve `hostname` and find a valid address.
-    /// `Hostname` may be either a hostname string, a numeric IPv4 address, or a
-    /// numeric IPv6 address.
-    ///
-    /// - Remark:
-    ///     Depending on the protocol, you must also call `listen(_:)` in order
-    ///     to receive incomming connections. In addition, modifiying 
-    ///     `self.address` affects the hints being passed to
-    ///     `getaddrinfo(hostname:service:hints:)` since is used to resolve
-    ///     addresses.
-    ///
-    ///
-    /// - Seealso:
-    ///     - [The bind man page][1]
-    ///     - [Commonly known ports][2]
-    ///
-    /// [1]: x-man-page://2/bind
-    /// [2]: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
-    ///
-    /// - parameter hostname:   A string which contains either a hostname or a 
-    ///                         numeric ip address.
-    ///
-    /// - parameter port:       A non-negative integer to bind `self` to. Some
-    ///                         values are reserved for the system and require
-    ///                         root privileges.
-    ///
-    /// - Throws: 
-    ///     Errors are thrown when a system call fails, and are wrapped in the 
-    ///     error type `SocketError`. This particular function also throws 
-    ///     `SocketError.ExhaustedAddresses`
-    ///
-    public func bindTo(host hostname: String, port: UInt16) throws {
-        guard port >= 0 else {
-            throw SocketError.parameter("invalid port number", .bind)
+    private func bindTo(local address: inout SocketAddress, shouldUnlink: Bool) throws {
+        var address = address as! LocalAddress
+        if shouldUnlink {
+            let file = address.path.reduce("") { $0 + "\($1)" }
+            try unlink(file, errorOnFNF: false)
         }
         
-        var hints = Darwin.addrinfo()
-        hints.ai_socktype   = addressInfo.type.systemValue
-        hints.ai_protocol   = addressInfo.communicationProtocol.systemValue
-        hints.ai_family     = addressInfo.family.systemValue
-        hints.ai_flags      = addressInfo.flags
-        
-        var errors: [Int32] = []
-        let hosts = try getaddrinfo(host: hostname, service: nil, hints: hints)
-        for host in hosts
-        {
-            if var address = host.address as? InternetAddress {
-                address.port = port.bigEndian
-                try initaliseSocket()
-                
-                let result = address.execute(castingTo: sockaddr.self) { sa in
-                    return Darwin.bind(
-                        fd,
-                        sa,
-                        socklen_t(address.length))
-                }
-                
-                guard result == 0 else {
-                    errors.append(errno)
-                    continue
-                }
-                
-                self.addressInfo = host
-                return
+        try address.execute(castingTo: sockaddr.self) { sa in
+            guard Darwin.bind(fd,
+                              sa,
+                              socklen_t(address.length)
+                ) == 0
+                else {
+                    throw SocketError.systemCallError(errno, .bind)
             }
         }
-        throw SocketError.exhaustedAddresses(errors, .bind)
-    }
-    /// Binds the socket to the given address on the file system. Use this for Local
-    /// (aka Unix) socket connections.
-    ///
-    /// A successful call to bind will result in the socket being assigned an
-    /// address which can be used for communications locally on the system.
-    ///
-    /// - parameter file:   An absolute path to a file. It does not need to
-    ///                     exsist. The length of the string cannot be greater
-    ///                     than 104 characters and must be encoded using
-    ///                     NSUTF8StringEncoding.
-    /// - parameter unlinkFile: `true` if the file should be removed, otherwise
-    ///                         `false`. If the file exsists and
-    ///                         `unlinkFile` is `false`, then the call to bind 
-    ///                         will fail. The default is `true`.
-    /// - Seealso:
-    ///     - `bindTo(host:port:)`
-    ///     - [The bind man pages](x-man-page://2/bind)
-    ///
-    /// - Throws: 
-    ///     Errors are thrown when a system call fails, and are wrapped in the 
-    ///     error type `SocketError`
-    ///
-    public func bindTo(_ file: String, shouldUnlink unlinkFile: Bool = true)
-        throws {
-            
-            if unlinkFile {
-                try unlink(file, errorOnFNF: false)
-            }
-
-            var addr = LocalAddress(path: file)
-            try addr.execute(castingTo: sockaddr.self) { sa in
-                guard Darwin.bind(fd,
-                                  sa,
-                                  socklen_t(addr.length)
-                    ) == 0
-                    else {
-                        throw SocketError.systemCallError(errno, .bind)
-                }
-            }
-            
-            addressInfo.address = addr
-            addressInfo.family = addr.family
     }
     
     /// Unlinks the file at the given url.
@@ -545,136 +456,42 @@ extension Socket {
     }
 }
 extension Socket {
-    /// Connects the socket to the given hostname and port number.
-    ///
-    /// A successful call will result in the socket being associated with the
-    /// hostname and port number. For connection orientated protocol (i.e. TCP),
-    /// this yields the sockets in a connected state, ready for sending and
-    /// recieving. For connectionless sockets, this allows the user to use
-    /// `send(data:length:flags)`, thus removin the need for specifying an
-    /// address every time.
-    ///
-    /// This function uses `getaddrinfo(hostname:service:hints:)` for obtaining
-    /// an address, and passes a copy of `self.address` as the parameter for 
-    /// hints. To pass any hints to `getaddrinfo(host:service:hints)`
-    /// set them on `self.address`. Upon a successful call to connect, 
-    /// `self.address` will be updated with the new address assigned.
-    ///
-    /// - Seealso:
-    ///     - [The connect man page][1]
-    ///     - [Commonly known ports][2]
-    ///
-    /// [1]: x-man-page://2/connect
-    /// [2]: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
-    ///
-    /// - parameter hostname:   A string containing either a hostname or a
-    ///                         numeric ip address.
-    /// - parameter port:       A non-negative integer. Note that some ports
-    ///                         require root privileges.
-    ///
-    /// - Throws:
-    ///     Errors are thrown when a system call fails, and are wrapped in the
-    ///     error type `SocketError`. This particular method also throws 
-    ///     `SocketError.ExhaustedAddresses` when no more addresses are avaiable.
-    ///
-    public func connectTo(host hostname: String, port: UInt16) throws {
-        guard port >= 0 else {
-            throw SocketError.parameter("invalid port number", .connect)
-        }
-        
-        var hints = Darwin.addrinfo()
-        hints.ai_socktype   = addressInfo.type.systemValue
-        hints.ai_protocol   = addressInfo.communicationProtocol.systemValue
-        hints.ai_family     = addressInfo.family.systemValue
-        hints.ai_flags      = addressInfo.flags
-        
-        var errors: [Int32] = []
-        let hosts = try getaddrinfo(host: hostname, service: nil, hints: hints)
-        for host in hosts
-        {
-            
-            if var address = host.address as? InternetAddress {
-                address.port = port.bigEndian
-                try initaliseSocket()
-                
-                let result = address.execute(castingTo: sockaddr.self) { sa in
-                    return Darwin.connect(
-                        fd,
-                        sa,
-                        socklen_t(address.length))
-                }
-                
-                guard result == 0 else {
-                    errors.append(errno)
-                    continue
-                }
-                
-                self.addressInfo = host
-                return
-            }
-        }
-        throw SocketError.exhaustedAddresses(errors, .connect)
-    }
-    /// Connects the socket to the given address and port number.
-    /// 
-    /// A successful call with result in teh socket being associated with the 
-    /// address and port given.
-    /// 
-    /// For a full description, checkout `connectTo(address:port:)`
-    /// 
-    /// - parameter address:    The address the socket will connect to.
-    /// - parameter port:       A non-negative integer. Note that some ports
-    ///                         require root privileges.
-    ///
-    ///     Errors are thrown when a system call fails, and are wrapped in the
-    ///     error type `SocketError`
-    ///
-    public func connectTo(_ address: AddressInfo, port: UInt16) throws {
-        guard port >= 0 else {
-            throw SocketError.parameter("invalid port number", .connect)
-        }
-        
-        if var netaddress = address.address as? InternetAddress {
-            netaddress.port = port.bigEndian
-            
-            try netaddress.execute(castingTo: sockaddr.self) { sa in
-                guard Darwin.connect(
-                    fd,
-                    sa,
-                    socklen_t(netaddress.length)
-                    ) == 0 else {
-                        throw SocketError.systemCallError(errno, .connect)
-                }
-            }
-            self.addressInfo = address
+    
+    public func connect() throws {
+        switch addressInfo.address {
+        case is InternetAddress, is LocalAddress:
+            try connectTo(internet: &addressInfo.address)
+//        case is LocalAddress:
+//            try connectTo(local: &addressInfo.address)
+        default:
+            fatalError("This class does not know how your bind the address")
         }
     }
-    /// Connects the socket given file address on the system.
-    ///
-    /// A successful call will result in the socket being associated with the
-    /// file on the system. This allows communication similar to `PIPE`, between
-    /// processes on the local system.
-    ///
-    /// - Note: The socket's family must be of type `DomainAddressFamily.Local`.
-    /// - parameters:
-    ///     - path:         The file path to connect to.
-    public func connectTo(_ file: String) throws {
-        
-        var addr = LocalAddress(path: file)
-        try addr.execute(castingTo: sockaddr.self) { sa in
+    
+    private func connectTo(internet address: inout SocketAddress) throws {
+        try address.execute(castingTo: sockaddr.self) { sa in
             guard Darwin.connect(
                 fd,
                 sa,
-                socklen_t(addr.length)
-                ) == 0
-                else {
+                socklen_t(address.length)
+                ) == 0 else {
                     throw SocketError.systemCallError(errno, .connect)
             }
         }
-        
-        addressInfo.family = addr.family
-        addressInfo.address = addr
     }
+//    
+//    private func connectTo(local address: inout SocketAddress) throws {
+//        try address.execute(castingTo: sockaddr.self) { sa in
+//            guard Darwin.connect(
+//                fd,
+//                sa,
+//                socklen_t(address.length)
+//                ) == 0
+//                else {
+//                    throw SocketError.systemCallError(errno, .connect)
+//            }
+//        }
+//    }
 }
 extension Socket {
     /// Sends `data` to the connected peer
@@ -831,7 +648,7 @@ extension Socket {
     ///	- Returns:
     ///						The number of bytes sent.
     ///
-    public func send(_ str: String, flags: Int32 = 0, maxSize: size_t = 1024) throws -> size_t {
+    @discardableResult public func send(_ str: String, flags: Int32 = 0, maxSize: size_t = 1024) throws -> size_t {
         let length = str.lengthOfBytes(using: String.Encoding.utf8)
         return try self.send(str, length: length, flags: flags, maxSize: maxSize)
     }
