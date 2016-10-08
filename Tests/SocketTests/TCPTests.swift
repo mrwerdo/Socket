@@ -46,7 +46,6 @@ class TCPTestCase: XCTestCase {
 class TCPClientAndServer : TCPTestCase {
     func testBindAndConnect() {
         do {
-            
             let addresses = try find(host: "localhost", on: port)
             for host in addresses where (host.family == DomainAddressFamily.inet) {
                 do {

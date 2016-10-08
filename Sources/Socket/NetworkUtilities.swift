@@ -57,18 +57,6 @@ public enum NetworkUtilitiesError : Error {
     case parameterError(String)
 }
 
-/// Returns the address of `obj`.
-///
-/// This function is fundamentally unsafe, and
-/// should be only used to get the address of a c structure. You must ensure 
-/// that the object exsists throughout the whole lifetime this pointer will 
-/// be used, which is typically done by ensuring the object lives within the
-/// same, or higher scope as the pointer.
-public func unsafeAddressOfCObj<T: Any>(_ obj: UnsafeMutablePointer<T>) ->
-    UnsafeMutablePointer<T> {
-    return obj
-}
-
 /// Converts the bytes of `value` from network order to host order.
 public func ntohs(_ value: CUnsignedShort) -> CUnsignedShort {
     if value.byteSwapped == value.bigEndian && value == value.littleEndian {
@@ -239,7 +227,6 @@ public func getnameinfo(_ info: AddressInfo, flags: Int32 = 0) throws
             
         }
         
-        
         guard success == 0 else {
             throw NetworkUtilitiesError.getNameInfoFailed(success)
         }
@@ -272,6 +259,7 @@ public func gethostname() throws -> String? {
     }
     return String(cString: &cstring)
 }
+
 /// Performs the call `Darwin.sethostname()`.
 ///
 /// The `sethostname(hostname:)` function is used to set the name host name for 
@@ -296,14 +284,6 @@ public func sethostname(_ hostname: String) throws {
         guard result == 0 else {
             throw NetworkUtilitiesError.setHostnameFailed(errno)
         }
-    }
-}
-
-extension String {
-    /// Returns a `String` given a c error `number`.
-    @available(*, deprecated: 10.10)
-    public static func fromCError(_ number: Int32) -> String {
-        return String(cString: strerror(number))
     }
 }
 

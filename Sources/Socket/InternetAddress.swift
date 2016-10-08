@@ -100,17 +100,23 @@ public struct InterfaceAddress {
         name = String(utf8String: ifaddr.ifa_name)!
         flags = ifaddr.ifa_flags
         
-        address = ifaddr.ifa_addr.withMemoryRebound(to: sockaddr_storage.self, capacity: 10) { (ptr) in
+        let size = MemoryLayout<sockaddr_storage>.size
+        address = ifaddr.ifa_addr.withMemoryRebound(to: sockaddr_storage.self, capacity: size) { (ptr) in
             return ptr.pointee
         }
-        netmask = ifaddr.ifa_netmask.withMemoryRebound(to: sockaddr_storage.self, capacity: -1) { (ptr) in
+        
+        // These two assignments must be ran optionally, as ifa_netmask and
+        // ifa_dstaddr may actually be nil.
+        netmask = ifaddr.ifa_netmask?.withMemoryRebound(to: sockaddr_storage.self, capacity: size) { (ptr) in
             return ptr.pointee
         }
-        destinationAddress = ifaddr.ifa_dstaddr.withMemoryRebound(to: sockaddr_storage.self, capacity: -1) { ptr in
+        destinationAddress = ifaddr.ifa_dstaddr?.withMemoryRebound(to: sockaddr_storage.self, capacity: size) { ptr in
             return ptr.pointee
         }
         if let a_data = ifaddr.ifa_data {
-            data = a_data.bindMemory(to: if_data.self, capacity: -1).pointee
+            let k = max(MemoryLayout<if_data>.size,
+                        MemoryLayout<if_data64>.size)
+            data = a_data.bindMemory(to: if_data.self, capacity: k).pointee
         }
     }
 }
