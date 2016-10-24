@@ -199,6 +199,37 @@ public func getaddrinfo(host hostname: UnsafePointer<CChar>?, service serviceNam
     return []
 }
 
+
+public func addressInfo(for host: String, hints: addrinfo = addrinfo()) throws -> [AddressInfo] {
+    typealias mPaddrinfo = UnsafeMutablePointer<addrinfo>?
+    var hints = hints
+    
+    let addresses = UnsafeMutablePointer<mPaddrinfo>.allocate(capacity: 1)
+    defer {
+        addresses.deallocate(capacity: 1)
+    }
+    let error = Darwin.getaddrinfo(host, nil, &hints, addresses)
+    guard error == 0 else {
+        throw NetworkUtilitiesError.getAddressInfoFailed(error)
+    }
+    
+    func n(k: mPaddrinfo) -> mPaddrinfo? {
+        if let i = k?.pointee, let b = i.ai_next {
+            return b
+        } else {
+            return nil
+        }
+    }
+    
+    guard addresses.pointee?.pointee != nil else {
+        return []
+    }
+    
+    return sequence(first: addresses.pointee, next: n).map { (ptr: mPaddrinfo) -> AddressInfo in
+        return AddressInfo(ptr!.pointee)
+    }
+}
+
 public func getnameinfo(_ info: AddressInfo, flags: Int32 = 0) throws
     -> (hostname: String?, servicename: String?) {
         var hostnameBuff = UnsafeMutablePointer<Int8>.allocate(capacity: Int(NI_MAXHOST))
