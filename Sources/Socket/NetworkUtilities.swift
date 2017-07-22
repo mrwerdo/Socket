@@ -244,7 +244,7 @@ public func getnameinfo(_ info: AddressInfo, flags: Int32 = 0) throws
         }
         var info = info
         let success = withUnsafePointer(to: &info.address.contents) { (ptr: sockaddr_storage_ptr) -> CInt in
-            return ptr.withMemoryRebound(to: sockaddr.self, capacity: MemoryLayout<sockaddr>.size, { (saddr: UnsafeMutablePointer<sockaddr>) -> Int32 in
+            return ptr.withMemoryRebound(to: sockaddr.self, capacity: MemoryLayout<sockaddr>.size, { (saddr: UnsafePointer<sockaddr>) -> Int32 in
                 return Darwin.getnameinfo(
                     saddr,
                     socklen_t(info.address.length),

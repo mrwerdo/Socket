@@ -110,6 +110,7 @@ public struct InterfaceAddress {
         netmask = ifaddr.ifa_netmask?.withMemoryRebound(to: sockaddr_storage.self, capacity: size) { (ptr) in
             return ptr.pointee
         }
+        
         destinationAddress = ifaddr.ifa_dstaddr?.withMemoryRebound(to: sockaddr_storage.self, capacity: size) { ptr in
             return ptr.pointee
         }
@@ -178,9 +179,9 @@ extension SockaddrInitalizer {
     public init(sockaddr sa: sockaddr) {
         var sa = sa
         let address = withUnsafePointer(to: &sa) { (ptr: UnsafePointer<sockaddr>) in
-            return ptr.withMemoryRebound(to: sockaddr_type.self, capacity: MemoryLayout<sockaddr_type>.size) { (ptr2: UnsafeMutablePointer<sockaddr_type>) in
-                return ptr2.pointee
-            }
+            return ptr.withMemoryRebound(to: sockaddr_type.self, capacity: MemoryLayout<sockaddr_type>.size, { (p: UnsafePointer<sockaddr_type>) -> sockaddr_type in
+                return p.pointee
+            })
         }
         self.init(address)
     }
@@ -258,7 +259,7 @@ extension AddressInfo {
 private func assign<Variable, Value>(_ storage: inout Variable, with value: Value) {
     var value = value
     storage = withUnsafePointer(to: &value) { (valuePtr: UnsafePointer<Value>) in
-        return valuePtr.withMemoryRebound(to: Variable.self, capacity: MemoryLayout<Variable>.size) { (ptr: UnsafeMutablePointer<Variable>) -> Variable in
+        return valuePtr.withMemoryRebound(to: Variable.self, capacity: MemoryLayout<Variable>.size) { (ptr: UnsafePointer<Variable>) -> Variable in
             return ptr.pointee
         }
     }

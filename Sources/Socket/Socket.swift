@@ -18,7 +18,7 @@
 //  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 //  FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL THE
 //  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  LIABILITY, WHETHER IN AN ACTION OF CqONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 //  THE SOFTWARE.
 //
@@ -246,10 +246,11 @@ public class Socket {
         closed = false
         self.shouldReuseAddress = shouldReuseAddress
     }
+    
     /// Constructs a socket from the given address infomation.
     ///
-    /// - Throws: 
-    ///     Errors are thrown when a system call fails, and are wrapped in the 
+    /// - Throws:
+    ///     Errors are thrown when a system call fails, and are wrapped in the
     ///     error type `SocketError`.
     ///
     public init(info: AddressInfo) throws {
@@ -493,6 +494,7 @@ extension Socket {
 //        }
 //    }
 }
+
 extension Socket {
     /// Sends `data` to the connected peer
     ///
@@ -678,6 +680,7 @@ extension Socket {
         return try self.send((data as NSData).bytes, length: len, flags: flags, maxSize: maxSize)
     }
 }
+
 extension Socket {
     /// Contains a message received from a peer.
     public class Message {
@@ -791,6 +794,7 @@ extension Socket {
     
     // TODO: Add a recv(msg: etc...) function.
 }
+
 extension Socket {
     /// Accepts a pending connection and returns the connected socket.
     /// 
@@ -847,6 +851,7 @@ extension Socket {
         }
     }
 }
+
 extension Socket {
     /// Sets whether the system is allowed to reuse the address if it's
     /// already in use.

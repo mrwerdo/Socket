@@ -24,107 +24,108 @@
 //
 
 import Darwin
+import Foundation
 
-//// Problem:    getaddrinfo() returns a linked list. It provides a method to free it
-////             freeaddrinfo(). struct addrinfo contains a pointer to another
-////             struct, so memory must be managed for two structures.
-//
-//// Now, I figured that sockaddr isn't a good structure to hold the memory.
-//// So I used sockaddr_storage since that is more compatible with other network
-//// protocol uses.
-//
-///// AddrInfo contains a references to address structures and socket address 
-///// structures.
-//@available(*, deprecated: 10.10)
-//public class AddrInfo : CustomDebugStringConvertible {
-//    public var addrinfo: Darwin.addrinfo
-//    public var sockaddr: UnsafeMutablePointer<Darwin.sockaddr> {
-//        get {
-//            
-//            
-//            return UnsafeMutablePointer(sockaddr_storage)
-//        }
-//    }
-//    public var sockaddr_storage: UnsafeMutablePointer<Darwin.sockaddr_storage>
-//    public var hostname: String? {
-//        if let hostname = String(validatingUTF8: addrinfo.ai_canonname) {
-//            return hostname
-//        }
-//        //        if let hostname = try? getnameinfo(self).hostname {
-//        //    return hostname
-//        //}
-//        return nil
-//    }
-//    
-//    public var sockaddr_in: UnsafeMutablePointer<Darwin.sockaddr_in> {
-//        return UnsafeMutablePointer<Darwin.sockaddr_in>(self.sockaddr)
-//    }
-//    
-//    /// Constructs the addresses so they all reference each other internally.
-//    public init() {
-//        addrinfo = Darwin.addrinfo()
-//        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>.allocate(
-//            capacity: sizeof(Darwin.sockaddr_storage)
-//        )
+struct CSocket {
+    
+    enum SError : Error {
+        case bind(CInt)
+        case connect(CInt)
+        case send(CInt)
+        case recv(CInt)
+    }
+    
+    static func bind(fd: CInt, to sa: sockaddr_storage) throws {
+        var l = sa
+        try withUnsafePointer(to: &l) { saptr in
+            let type = sockaddr.self
+            let c = MemoryLayout<sockaddr>.size
+            try saptr.withMemoryRebound(to: type, capacity: c) { ptr in
+                guard 0 == Darwin.bind(fd, ptr, socklen_t(sa.ss_len)) else {
+                    throw SError.bind(errno)
+                }
+            }
+        }
+    }
+    
+    static func connect(fd: CInt, to sa: sockaddr_storage) throws {
+        var l = sa
+        try withUnsafePointer(to: &l) { saptr in
+            let type = sockaddr.self
+            let c = MemoryLayout<sockaddr>.size
+            try saptr.withMemoryRebound(to: type, capacity: c) { ptr in
+                guard 0 == Darwin.connect(fd, ptr, socklen_t(sa.ss_len)) else {
+                    throw SError.connect(errno)
+                }
+            }
+        }
+    }
+    
+    static func send(fd: CInt,
+                     to sa: sockaddr_storage,
+                     data: Data,
+                     flags: CInt = 0,
+                     packetSize: Int = 1024,
+                     numberOfAttempts loopCount: Int = 1) throws -> Int {
+        
+        var l = sa
+        return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> Int in
+            return try withUnsafePointer(to: &l) { saptr -> Int in
+                let type = sockaddr.self
+                let c = MemoryLayout<sockaddr>.size
+                return try saptr.withMemoryRebound(to: type, capacity: c) { addressptr -> Int in
+                    
+                    var head = ptr
+                    var bytesLeft = data.count
+                    var bytesSent = 0
+                    
+                    for _ in 0..<loopCount where data.count > bytesSent {
+                        let len = min(bytesLeft, packetSize)
+                        let ret = Darwin.sendto(fd,
+                                                head,
+                                                len,
+                                                flags,
+                                                addressptr,
+                                                socklen_t(sa.ss_len))
+                        
+                        guard ret != -1 else {
+                            throw SError.send(errno)
+                        }
+                        
+                        bytesSent += ret
+                        bytesLeft -= ret
+                        head = head.advanced(by: ret)
+                    }
+                    return bytesSent
+                }
+            }
+        }
+    }
+    
+//    static func recv(fd: CInt, size: Int, flags: CInt = 0) throws -> (length: Int, ptr: UnsafeRawPointer) {
+//        var buffer = UnsafeMutablePointer<Int8>.allocate(capacity: size + 1)
+//        var addrLen = socklen_t(MemoryLayout<sockaddr>.size)
+//        let addr = UnsafeMutablePointer<sockaddr>.allocate(capacity: MemoryLayout<sockaddr>.size)
 //        
-//        addrinfo.ai_canonname = nil
-//        addrinfo.ai_addr = sockaddr
-//    }
-//    /// Claims ownership of the address provided. It must have been created 
-//    /// by performing: 
-//    ///
-//    ///      let size = sizeof(sockaddr_storage)
-//    ///      let addr = UnsafeMutablePointer<sockaddr_storage>.alloc(size)
-//    public init(claim addr: Darwin.addrinfo) {
-//        addrinfo = addr
-//        sockaddr_storage = UnsafeMutablePointer<Darwin.sockaddr_storage>(
-//            addr.ai_addr
+//        defer {
+//            buffer.deallocate(capacity: size + 1)
+//            addr.deallocate(capacity: MemoryLayout<sockaddr>.size)
+//        }
+//        
+//        let success = Darwin.recvfrom(
+//            fd,
+//            buffer,
+//            size,
+//            flags,
+//            addr,
+//            &addrLen
 //        )
-//    }
-//    public init(copy addr: Darwin.addrinfo) {
-//        addrinfo = addr
-//        sockaddr_storage = UnsafeMutablePointer.allocate(capacity: sizeof(Darwin.sockaddr_storage))
-//        if addr.ai_addr != nil {
-//            sockaddr_storage.pointee = UnsafeMutablePointer(addr.ai_addr).pointee
+//        guard success != -1 else {
+//            throw SocketError.systemCallError(errno, .recv)
 //        }
-//        addrinfo.ai_addr = sockaddr
-//        if addr.ai_canonname != nil {
-//            let length = Int(strlen(addr.ai_canonname) + 1)
-//            addrinfo.ai_canonname = UnsafeMutablePointer<Int8>.allocate(capacity: length)
-//            strcpy(addrinfo.ai_canonname, addr.ai_canonname)
-//        }
+//        buffer[success] = 0
+//        
+//        return Message(copy: buffer, length: success + 1, sender: addr.pointee)
 //    }
-//    deinit {
-//        sockaddr_storage.deallocate(capacity: sizeof(Darwin.sockaddr_storage))
-//        if addrinfo.ai_canonname != nil {
-//            let length = Int(strlen(addrinfo.ai_canonname) + 1)
-//            addrinfo.ai_canonname.deallocate(capacity: length)
-//        }
-//    }
-//    
-//    public var debugDescription: String {
-//        var out = ""
-//        let sockAddrStorage = sockaddr_storage.pointee
-//        print(addrinfo,
-//            sockAddrStorage,
-//            separator: ", ",
-//            terminator: "",
-//            to: &out
-//        )
-//        return out
-//    }
-//
-//    public func setPort(_ port: Int32) throws {
-//        typealias address = Darwin.sockaddr_in
-//        switch addrinfo.ai_family {
-//        case PF_INET:
-//            let ipv4 = UnsafeMutablePointer<address>(addrinfo.ai_addr)
-//            ipv4?.pointee.sin_port = htons(CUnsignedShort(port))
-//        case PF_INET6:
-//            let ipv6 = UnsafeMutablePointer<address>(addrinfo.ai_addr)
-//            ipv6?.pointee.sin_port = htons(CUnsignedShort(port))
-//        default:
-//            throw SocketError.parameter("do not know how to set port", .setOption)
-//        }
-//    }
-//}
+    
+}

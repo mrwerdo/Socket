@@ -31,6 +31,25 @@ class TCPTestCase: XCTestCase {
         p1 = nil
         super.tearDown()
     }
+    
+    func pair(host: String, port: in_port_t, matching filter: (AddressInfo) -> Bool) throws -> (Socket, Socket) {
+        for address in try find(host: host, on: port) where filter(address) {
+            do {
+                let server = try Socket(info: address)
+                try server.bind()
+                try server.listen(1)
+                let peer1 = try Socket(info: address)
+                try peer1.connect()
+                let peer2 = try server.accept()
+                try server.close()
+                return (peer1, peer2)
+            } catch {
+                continue
+            }
+        }
+        // TODO: Make this a proper error.
+        throw SocketError.parameter("Exhausted addresses to pair the sockets on.", .init)
+    }
 }
 
 class TCPClientAndServer : TCPTestCase {
@@ -73,6 +92,31 @@ class TCPClientAndServer : TCPTestCase {
                 }
             } else {
                 XCTFail("Unable to find any addresses to sent up sending on!")
+            }
+            
+        } catch {
+            XCTFail(reason(with: error))
+        }
+    }
+    
+    func testPairAddresses() {
+        do {
+            let (p0, p1) = try pair(host: "localhost", port: 5000) { (info: AddressInfo) -> Bool in
+                switch info.communicationProtocol {
+                case .tcp:
+                    return true
+                default:
+                    return false
+                }
+            }
+            
+            let sentMessage = "Hello, World"
+            try p0.send(sentMessage)
+            if let data = try p1.recv(1024) {
+                let str = String(cString: data.data)
+                XCTAssert(str == sentMessage)
+            } else {
+                XCTFail("failed to recieve data from the sending pere.")
             }
             
         } catch {

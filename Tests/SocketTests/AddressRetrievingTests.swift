@@ -49,7 +49,9 @@ class AddressRetrivingTests: XCTestCase {
     
     func testGetHostByName() {
         do {
-            let _ = try gethostbyname("michaelas-macbook-pro.local", family: .inet)
+            if let host = try? gethostname(), let h = host {
+                let _ = try gethostbyname(h, family: .inet)
+            }
         } catch {
             XCTFail(reason(with: error))
         }
