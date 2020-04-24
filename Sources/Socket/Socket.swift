@@ -260,7 +260,7 @@ public class Socket {
                            info.type.systemValue,
                            info.communicationProtocol.systemValue)
         guard fd != -1 else {
-            throw SocketError.systemCallError(errno, .init)
+            throw SocketError.systemCallError(errno, .`init`)
         }
     }
     
@@ -297,7 +297,7 @@ public class Socket {
             addressInfo.communicationProtocol.systemValue
         )
         guard fd != -1 else {
-            throw SocketError.systemCallError(errno, .init)
+            throw SocketError.systemCallError(errno, .`init`)
         }
         closed = false
         try setShouldReuseAddress(shouldReuseAddress)

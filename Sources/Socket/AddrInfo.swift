@@ -69,13 +69,20 @@ struct CSocket {
                      numberOfAttempts loopCount: Int = 1) throws -> Int {
         
         var l = sa
-        return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> Int in
+        guard data.count > 0 else {
+            return 0
+        }
+        
+        return try data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> Int in
             return try withUnsafePointer(to: &l) { saptr -> Int in
                 let type = sockaddr.self
                 let c = MemoryLayout<sockaddr>.size
                 return try saptr.withMemoryRebound(to: type, capacity: c) { addressptr -> Int in
                     
-                    var head = ptr
+                    guard var head = ptr.baseAddress else {
+                        return 0
+                    }
+                    
                     var bytesLeft = data.count
                     var bytesSent = 0
                     

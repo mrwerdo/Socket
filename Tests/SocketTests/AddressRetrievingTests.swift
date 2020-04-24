@@ -49,7 +49,7 @@ class AddressRetrivingTests: XCTestCase {
     
     func testGetHostByName() {
         do {
-            if let host = try? gethostname(), let h = host {
+            if let host = (try? gethostname() as String??), let h = host {
                 let _ = try gethostbyname(h, family: .inet)
             }
         } catch {

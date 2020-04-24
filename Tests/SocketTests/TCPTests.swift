@@ -48,7 +48,7 @@ class TCPTestCase: XCTestCase {
             }
         }
         // TODO: Make this a proper error.
-        throw SocketError.parameter("Exhausted addresses to pair the sockets on.", .init)
+        throw SocketError.parameter("Exhausted addresses to pair the sockets on.", .`init`)
     }
 }
 
