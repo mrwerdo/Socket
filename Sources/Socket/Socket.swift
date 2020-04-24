@@ -413,10 +413,11 @@ extension Socket {
     }
     
     private func bindTo(internet address: inout SocketAddress) throws {
+        let length = address.length
         try address.execute(castingTo: sockaddr.self) { (sa: UnsafeMutablePointer<sockaddr>) in
             guard Darwin.bind(fd,
                               sa,
-                              socklen_t(address.length)
+                              socklen_t(length)
                 ) == 0 else {
                     throw SocketError.systemCallError(errno, .bind)
             }
@@ -429,11 +430,11 @@ extension Socket {
             let file = address.path.reduce("") { $0 + "\($1)" }
             try unlink(file, errorOnFNF: false)
         }
-        
+        let length = address.length
         try address.execute(castingTo: sockaddr.self) { sa in
             guard Darwin.bind(fd,
                               sa,
-                              socklen_t(address.length)
+                              socklen_t(length)
                 ) == 0
                 else {
                     throw SocketError.systemCallError(errno, .bind)
@@ -470,11 +471,12 @@ extension Socket {
     }
     
     private func connectTo(internet address: inout SocketAddress) throws {
+        let length = address.length
         try address.execute(castingTo: sockaddr.self) { sa in
             guard Darwin.connect(
                 fd,
                 sa,
-                socklen_t(address.length)
+                socklen_t(length)
                 ) == 0 else {
                     throw SocketError.systemCallError(errno, .connect)
             }
@@ -571,7 +573,7 @@ extension Socket {
         var bytesleft = length
         var bytesSent = 0
         var info = info
-
+        let length = info.address.length
         try info.address.execute(castingTo: sockaddr.self) { sa in
             loop: while (length > bytesSent) {
                 let len = bytesleft < maxSize ? bytesleft : maxSize
@@ -581,7 +583,7 @@ extension Socket {
                     len,
                     flags,
                     sa,
-                    socklen_t(info.address.length)
+                    socklen_t(length)
                 )
                 guard success != -1 else {
                     throw SocketError.systemCallError(errno, .send)
@@ -711,7 +713,7 @@ extension Socket {
             memcpy(self.data, data, length)
         }
         deinit {
-            data.deallocate(capacity: length)
+            data.deallocate()
         }
     }
     /// Returns any data which has been received from the peer(s).
@@ -744,8 +746,8 @@ extension Socket {
         let addr = UnsafeMutablePointer<sockaddr>.allocate(capacity: MemoryLayout<sockaddr>.size)
         
         defer {
-            buffer.deallocate(capacity: maxSize + 1)
-            addr.deallocate(capacity: MemoryLayout<sockaddr>.size)
+            buffer.deallocate()
+            addr.deallocate()
         }
         
         let success = Darwin.recvfrom(
@@ -773,8 +775,8 @@ extension Socket {
         let addr = UnsafeMutablePointer<sockaddr>.allocate(capacity: MemoryLayout<sockaddr>.size)
         
         defer {
-            buffer.deallocate(capacity: maxSize + 1)
-            addr.deallocate(capacity: MemoryLayout<sockaddr>.size)
+            buffer.deallocate()
+            addr.deallocate()
         }
         
         let success = Darwin.recvfrom(

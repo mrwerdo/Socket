@@ -96,7 +96,7 @@ public struct AddressHints {
 }
 
 private func convert(_ results: [AddressInfo], andAssign port: in_port_t) -> [AddressInfo] {
-    let k: [AddressInfo] = results.flatMap { addrInfo in
+    let k: [AddressInfo] = results.compactMap { addrInfo in
         var addrInfo = addrInfo
         if var s = addrInfo.address as? InternetAddress {
             s.port = port
@@ -178,7 +178,7 @@ public func getaddrinfo(host hostname: UnsafePointer<CChar>?, service serviceNam
     var hints = hints
     let ptr = UnsafeMutablePointer<UnsafeMutablePointer<addrinfo>?>.allocate(capacity: 1)
     defer {
-        ptr.deallocate(capacity: 1)
+        ptr.deallocate()
     }
     let error = Darwin.getaddrinfo(hostname, serviceName, &hints, ptr)
     guard error == 0 else {
@@ -206,7 +206,7 @@ public func addressInfo(for host: String, hints: addrinfo = addrinfo()) throws -
     
     let addresses = UnsafeMutablePointer<mPaddrinfo>.allocate(capacity: 1)
     defer {
-        addresses.deallocate(capacity: 1)
+        addresses.deallocate()
     }
     let error = Darwin.getaddrinfo(host, nil, &hints, addresses)
     guard error == 0 else {
@@ -239,15 +239,16 @@ public func getnameinfo(_ info: AddressInfo, flags: Int32 = 0) throws
         memset(servicenameBuff, 0, Int(NI_MAXSERV))
         
         defer {
-            hostnameBuff.deallocate(capacity: Int(NI_MAXHOST))
-            servicenameBuff.deallocate(capacity: Int(NI_MAXSERV))
+            hostnameBuff.deallocate()
+            servicenameBuff.deallocate()
         }
         var info = info
+        let length = info.address.length
         let success = withUnsafePointer(to: &info.address.contents) { (ptr: sockaddr_storage_ptr) -> CInt in
             return ptr.withMemoryRebound(to: sockaddr.self, capacity: MemoryLayout<sockaddr>.size, { (saddr: UnsafePointer<sockaddr>) -> Int32 in
                 return Darwin.getnameinfo(
                     saddr,
-                    socklen_t(info.address.length),
+                    socklen_t(length),
                     hostnameBuff,
                     UInt32(NI_MAXHOST) * UInt32(MemoryLayout<Int8>.size),
                     servicenameBuff,
